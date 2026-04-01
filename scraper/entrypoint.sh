@@ -8,9 +8,10 @@ LOG_FILE="${LOG_FILE:-/app/logs/scrape.log}"
 mkdir -p /app/logs /app/data /app/cookies
 
 # Write cron job. Include a dated header before each run (date is evaluated by cron at runtime)
-echo "$CRON_SCHEDULE root cd /app && printf '\n####################################################\n    [%s]\n####################################################\n' \"\$(date '+%Y-%m-%d %H:%M:%S')\" >> $LOG_FILE && python3 kab_data.py >> $LOG_FILE 2>&1 && python3 s_dk_data.py >> $LOG_FILE 2>&1" > /etc/cron.d/scrape-cron
+# Place the job in /etc/cron.d (this file must include the user field). Do NOT run
+# `crontab` on the file — the system cron daemon reads /etc/cron.d entries directly.
+echo "$CRON_SCHEDULE root cd /app && printf '\n####################################################\n    [%s]\n####################################################\n' \"\$(date '+\%Y-\%m-\%d \%H:\%M:\%S')\" >> $LOG_FILE && python3 kab_data.py >> $LOG_FILE 2>&1 && python3 s_dk_data.py >> $LOG_FILE 2>&1" > /etc/cron.d/scrape-cron
 chmod 0644 /etc/cron.d/scrape-cron
-crontab /etc/cron.d/scrape-cron
 
 # Start cron daemon
 cron || true
