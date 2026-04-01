@@ -2,11 +2,12 @@ from datetime import datetime
 import re
 
 from dotenv import dotenv_values
+from pathlib import Path
 from web_automator import BrowserWrapper, PageWrapper, DataCollector
 
 from clean_kab_data import clean_kab_data
 
-ENV_VALUES = dotenv_values(".env")
+ENV_VALUES = dotenv_values(str(Path(__file__).parent / ".env"))
 
 
 
