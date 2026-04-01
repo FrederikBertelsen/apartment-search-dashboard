@@ -7,11 +7,16 @@ WORKDIR /app
 
 COPY requirements-scraper.txt  ./
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends cron \
-    && pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements-scraper.txt \
-    && rm -rf /var/lib/apt/lists/*
+# Ensure any stale apt state is removed, then retry update a few times to
+# avoid intermittent "Hash Sum mismatch" errors from mirrors.
+RUN rm -rf /var/lib/apt/lists/* \
+ && set -eux; \
+ for i in 1 2 3; do \
+     apt-get update && apt-get install -y --no-install-recommends cron && break || sleep 5; \
+ done; \
+ pip install --upgrade pip \
+ && pip install --no-cache-dir -r requirements-scraper.txt \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY scraper/ /app/
 
