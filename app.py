@@ -13,6 +13,7 @@ from __future__ import annotations
 import dash
 from dash import dcc, html, Input, Output, dash_table
 import plotly.express as px
+import pandas as pd
 from typing import Any, Dict, List, cast
 
 from dashboard_data import load_and_prepare_all
@@ -78,6 +79,62 @@ def make_app(data_dir: str = "data"):
     else:
         fig_sdk = px.line()
         fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+
+    # prepare KAB lowest-queue history figure (overall min + avg of lowest 10 per snapshot)
+    df_for_lowest = kab_history_full if (kab_history_full is not None and not kab_history_full.empty) else kab_history
+    if df_for_lowest is not None and not df_for_lowest.empty:
+        df_lowest = df_for_lowest.copy()
+        if "snapshot_time" in df_lowest.columns:
+            df_lowest["snapshot_time"] = pd.to_datetime(df_lowest["snapshot_time"], errors="coerce")
+        if "place_in_queue" in df_lowest.columns:
+            df_lowest["place_in_queue"] = pd.to_numeric(df_lowest["place_in_queue"], errors="coerce")
+        try:
+            # overall minimum per snapshot
+            df_min = df_lowest.groupby("snapshot_time", as_index=False)["place_in_queue"].min().sort_values("snapshot_time")
+            # mean of the lowest N places per snapshot (N=10)
+            def _avg_lowest_n(s, n=10):
+                vals = s.dropna().nsmallest(n)
+                return float(vals.mean()) if not vals.empty else float("nan")
+            df_avg10 = (
+                df_lowest.groupby("snapshot_time")["place_in_queue"]
+                .apply(lambda s: _avg_lowest_n(s, 10))
+                .reset_index(name="avg_lowest_10")
+                .sort_values("snapshot_time")
+            )
+        except Exception:
+            df_min = pd.DataFrame()
+            df_avg10 = pd.DataFrame()
+
+        if not df_min.empty:
+            fig_lowest = px.line(
+                df_min,
+                x="snapshot_time",
+                y="place_in_queue",
+                labels={"place_in_queue": "Lowest place in queue"},
+            )
+            # ensure the primary trace has a user-friendly legend name and is shown in the legend
+            if fig_lowest.data:
+                fig_lowest.data[0].name = "Lowest place in queue"
+                fig_lowest.data[0].showlegend = True
+            fig_lowest.update_layout(showlegend=True)
+            # add avg-lowest-10 as a dashed line
+            if not df_avg10.empty:
+                fig_lowest.add_scatter(
+                    x=df_avg10["snapshot_time"],
+                    y=df_avg10["avg_lowest_10"],
+                    mode="lines",
+                    name="Avg lowest 10",
+                    line=dict(dash="dash", width=2),
+                )
+            # keep normal y-axis direction (lower values at bottom)
+            fig_lowest.update_yaxes(autorange=True)
+            fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+        else:
+            fig_lowest = px.line()
+            fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+    else:
+        fig_lowest = px.line()
+        fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
 
     page_style = {"backgroundColor": "#111111", "color": "#eaeaea", "minHeight": "100vh", "padding": "16px"}
 
@@ -207,6 +264,10 @@ def make_app(data_dir: str = "data"):
                     style_cell={"textAlign": "left", "whiteSpace": "normal", "height": "auto", "minWidth": "120px", "maxWidth": "360px", "backgroundColor": "#111111", "color": "#eaeaea", "border": "1px solid #222222"},
                     style_header={"backgroundColor": "#222222", "color": "#eaeaea"},
                 ),
+            ]),
+            dcc.Tab(label="KAB Lowest Queue", style=tab_style, selected_style=tab_selected_style, children=[
+                html.H2("KAB - Lowest queue position over time"),
+                dcc.Graph(id="kab-lowest-queue", figure=fig_lowest, style={"height": "450px"}),
             ]),
             dcc.Tab(label="s.dk History", style=tab_style, selected_style=tab_selected_style, children=[
                 html.H2("s.dk queue history (min queue)"),
