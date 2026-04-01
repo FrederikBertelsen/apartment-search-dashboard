@@ -4,7 +4,7 @@ import re
 from dotenv import dotenv_values
 from web_automator import BrowserWrapper, PageWrapper, DataCollector
 
-from scraper.clean_kab_data import clean_kab_data
+from clean_kab_data import clean_kab_data
 
 ENV_VALUES = dotenv_values(".env")
 
