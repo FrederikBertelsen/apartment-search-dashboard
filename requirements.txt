@@ -1,0 +1,8 @@
+dash
+dash-bootstrap-components
+dotenv
+numpy
+pandas
+plotly
+python-dotenv
+setuptools

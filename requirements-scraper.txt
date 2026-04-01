@@ -1,0 +1,6 @@
+python-dotenv
+camoufox
+web-automator @ git+https://github.com/FrederikBertelsen/web-automator.git
+playwright
+camoufox
+pandas

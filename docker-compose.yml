@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: apartment_search_web
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./data:/app/data:ro
+    restart: unless-stopped
+
+  scraper:
+    build:
+      context: .
+      dockerfile: scraper/Dockerfile
+    container_name: apartment_search_scraper
+    volumes:
+      - ./data:/app/data
+      - ./cookies:/app/cookies
+      - ./logs:/app/logs
+    environment:
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 4 * * *} # Default: every day at 4 AM
+    restart: unless-stopped
