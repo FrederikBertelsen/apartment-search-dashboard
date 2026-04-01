@@ -7,7 +7,7 @@ from web_automator import BrowserWrapper, PageWrapper, DataCollector
 
 from clean_kab_data import clean_kab_data
 
-ENV_VALUES = dotenv_values(str(Path(__file__).parent / ".env"))
+ENV_VALUES = dotenv_values(".env")
 
 
 

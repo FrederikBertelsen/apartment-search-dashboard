@@ -9,7 +9,7 @@ from web_automator import BrowserWrapper, PageWrapper, DataCollector
 
 from clean_s_dk_data import clean_s_dk_data
 
-ENV_VALUES = dotenv_values(str(Path(__file__).parent / ".env"))
+ENV_VALUES = dotenv_values(".env")
 
 
 def accept_cookies_if_needed(page: PageWrapper):
