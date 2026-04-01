@@ -42,7 +42,7 @@ def make_app(data_dir: str = "data"):
     top10_eta = data.get("top10_eta", None)
     summary_stats = data.get("summary_stats", None)
 
-    app = dash.Dash(__name__)
+    app = dash.Dash(__name__, title="Apartment Search Dashboard")
 
     # tab styles for a dark-gray appearance
     tab_style = {"backgroundColor": "#2b2b2b", "color": "#eaeaea", "padding": "6px", "border": "none"}
