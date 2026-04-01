@@ -34,7 +34,7 @@ ssh -i "$SSH_KEY" "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE_SCRIPT'
   git pull
   
   echo "🏗️  Rebuilding and starting containers..."
-  docker compose up -d --build
+  docker compose up -d --build --force-recreate
   
   echo "✅ Deployment complete!"
   echo "📊 Container status:"
