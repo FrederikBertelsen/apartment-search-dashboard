@@ -369,4 +369,4 @@ def make_app(data_dir: str = "data"):
 
 if __name__ == "__main__":
     app = make_app()
-    app.run(host="0.0.0.0", debug=True)
+    app.run(host="0.0.0.0", debug=False)
