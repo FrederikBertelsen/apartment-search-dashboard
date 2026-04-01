@@ -1,14 +1,14 @@
 services:
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: apartment_search_web
-    ports:
-      - "8050:8050"
-    volumes:
-      - ./data:/app/data:ro
-    restart: unless-stopped
+  # web:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: apartment_search_web
+  #   ports:
+  #     - "8050:8050"
+  #   volumes:
+  #     - ./data:/app/data:ro
+  #   restart: unless-stopped
 
   scraper:
     build:
