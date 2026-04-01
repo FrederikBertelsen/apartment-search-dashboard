@@ -21,6 +21,7 @@ services:
       - ./data:/app/data
       - ./cookies:/app/cookies
       - ./logs:/app/logs
+      - ./scraper/.env:/app/.env:ro
     environment:
       - CRON_SCHEDULE=${CRON_SCHEDULE:-0 4 * * *} # Default: every day at 4 AM
     restart: unless-stopped
