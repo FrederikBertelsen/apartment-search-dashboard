@@ -16,6 +16,8 @@ RUN apt-get update \
 
 COPY . .
 
+RUN rm -rf /app/scraper
+
 EXPOSE 8050
 
 CMD ["python3", "app.py"]

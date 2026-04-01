@@ -6,7 +6,7 @@ from dotenv import dotenv_values
 
 from web_automator import BrowserWrapper, PageWrapper, DataCollector
 
-from clean_s_dk_data import clean_s_dk_data
+from scraper.clean_s_dk_data import clean_s_dk_data
 
 ENV_VALUES = dotenv_values(".env")
 
