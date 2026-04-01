@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements-scraper.txt  ./
+COPY scraper/requirements-scraper.txt  ./
 
 # Ensure any stale apt state is removed, then retry update a few times to
 # avoid intermittent "Hash Sum mismatch" errors from mirrors.
