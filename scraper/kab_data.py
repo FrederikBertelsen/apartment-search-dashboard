@@ -96,7 +96,7 @@ def main():
             else:
                 location = None
             
-            company = company_text.strip() if company_text else None
+            company = company_text.strip().split('\n')[0] if company_text else None
 
             department = re.search(r"Afd: (.*)", company_text)
             if department:
