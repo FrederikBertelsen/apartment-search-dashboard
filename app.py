@@ -100,6 +100,14 @@ def make_app(data_dir: str = "data"):
         # hide internal numeric price columns from the KAB table — we keep only the human-friendly range
         kab_visible = visible_columns_for(kab_latest)
         kab_visible = [c for c in kab_visible if c not in {"price_per_m2_min", "price_per_m2_max", "price_per_m2"}]
+
+        # keep place_in_queue first and place_change_30d immediately after it
+        if "place_in_queue" in kab_visible:
+            kab_visible.remove("place_in_queue")
+            if "place_change_30d" in kab_visible:
+                kab_visible.remove("place_change_30d")
+            kab_visible = ["place_in_queue", "place_change_30d"] + kab_visible
+
         kab_table_columns = [{"name": c, "id": c} for c in kab_visible]
         kab_table_columns.append({"name": "Open", "id": "open_url"})
     else:
