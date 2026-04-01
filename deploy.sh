@@ -33,8 +33,11 @@ ssh -i "$SSH_KEY" "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE_SCRIPT'
   echo "📥 Pulling latest changes..."
   git pull
   
-  echo "🏗️  Rebuilding and starting containers..."
-  docker compose up -d --build --force-recreate
+  echo "🏗️  Rebuilding both images (web + scraper)..."
+  docker compose build web scraper
+  
+  echo "🚀 Starting web container only..."
+  docker compose up -d --no-build --force-recreate web
   
   echo "✅ Deployment complete!"
   echo "📊 Container status:"
