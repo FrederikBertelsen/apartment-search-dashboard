@@ -14,7 +14,6 @@ services:
     build:
       context: .
       dockerfile: scraper/Dockerfile
-    container_name: apartment_search_scraper
     volumes:
       - ./data:/app/data
       - ./cookies:/app/cookies
@@ -22,4 +21,5 @@ services:
       - ./scraper/.env:/app/.env:ro
     environment:
       - CRON_SCHEDULE=${CRON_SCHEDULE:-0 4 * * *} # Default: every day at 4 AM
-    restart: unless-stopped
+    # For host cron job style we do not use restart or fixed container_name
+

@@ -12,7 +12,7 @@ COPY scraper/requirements-scraper.txt  ./
 RUN rm -rf /var/lib/apt/lists/* \
  && set -eux; \
  for i in 1 2 3; do \
-     apt-get update && apt-get install -y --no-install-recommends cron && break || sleep 5; \
+     apt-get update && break || sleep 5; \
  done; \
  pip install --upgrade pip \
  && pip install --no-cache-dir -r requirements-scraper.txt \
