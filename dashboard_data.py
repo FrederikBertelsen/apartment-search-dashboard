@@ -256,12 +256,20 @@ def estimate_eta_to_zero(kab_full: pd.DataFrame, min_points: int = 2):
         g = g.dropna(subset=["snapshot_time", "place_in_queue"]).sort_values("snapshot_time")
         if len(g) < min_points:
             continue
-        # time in days
-        t = g["snapshot_time"].astype("int64") // 10 ** 9
-        t_days = t / (60 * 60 * 24)
+        # compute time in days relative to the first snapshot to improve numeric
+        # conditioning for the linear fit (avoids very large absolute time values)
+        try:
+            t_days = (g["snapshot_time"] - g["snapshot_time"].iloc[0]).dt.total_seconds() / 86400.0
+            t_days = t_days.values.astype(float)
+        except Exception:
+            # fallback: use integer seconds offset from min timestamp
+            t = g["snapshot_time"].astype("int64") // 10 ** 9
+            t_days = (t - t.min()) / (60 * 60 * 24)
+            t_days = t_days.astype(float)
+
         y = g["place_in_queue"].values
-        # require variance in y
-        if np.nanstd(y) == 0:
+        # require variance in y and in time (otherwise fit is meaningless)
+        if np.nanstd(y) == 0 or np.nanstd(t_days) == 0:
             continue
         try:
             slope, intercept = np.polyfit(t_days, y, 1)
@@ -351,13 +359,17 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
             cutoff = last_row["snapshot_time"] - pd.Timedelta(days=30)
             earlier = g[g["snapshot_time"] <= cutoff]
             if earlier.empty:
-                place_change_map[aid] = 0.0
+                # No snapshot older than 30 days — fall back to the earliest
+                # available snapshot so we still report change over the
+                # available period (which is <= 30 days).
+                prev = g.iloc[0]
             else:
                 prev = earlier.iloc[-1]
-                if pd.notna(last_row["place_in_queue"]) and pd.notna(prev["place_in_queue"]):
-                    place_change_map[aid] = float(last_row["place_in_queue"] - prev["place_in_queue"])
-                else:
-                    place_change_map[aid] = 0.0
+
+            if pd.notna(last_row["place_in_queue"]) and pd.notna(prev["place_in_queue"]):
+                place_change_map[aid] = float(last_row["place_in_queue"] - prev["place_in_queue"])
+            else:
+                place_change_map[aid] = 0.0
 
     # newest per apartment
     kab_latest = dedupe_latest_by_id(kab, time_col="snapshot_time")
@@ -805,15 +817,9 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
     except Exception:
         pass
 
-    # If there are no computed ETAs (top10_eta empty) the default filtered
-    # KAB history view should be empty (no lines). The full history is kept
-    # intact and still available when the user toggles "Show all data".
-    try:
-        if (top10_eta is None) or (hasattr(top10_eta, 'empty') and top10_eta.empty):
-            if kab_history is not None and not kab_history.empty:
-                kab_history = kab_history.iloc[0:0].reset_index(drop=True)
-    except Exception:
-        pass
+    # Keep the filtered `kab_history` intact regardless of whether we have
+    # computed ETAs. The full history (`kab_history_full`) remains available
+    # when the user toggles "Show all data" in the UI.
 
     return {
         "kab_latest": kab_latest,

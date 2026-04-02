@@ -50,34 +50,53 @@ def make_app(data_dir: str = "data"):
 
     # build initial figure for KAB history (dark template)
     if kab_history is not None and not kab_history.empty:
-        fig_history = px.line(
-            kab_history,
-            x="snapshot_time",
-            y="place_in_queue",
-            color="apartment_id",
-            hover_name="apartment_id",
-            labels={"place_in_queue": "Place in queue"},
-            markers=True,
-        )
-        fig_history.update_yaxes(autorange="reversed")
-        fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+        # ignore apartments with extremely large queue placements (user-specified cutoff)
+        df_hist = kab_history.copy()
+        if "place_in_queue" in df_hist.columns:
+            df_hist["place_in_queue"] = pd.to_numeric(df_hist["place_in_queue"], errors="coerce")
+            df_hist = df_hist[~(df_hist["place_in_queue"] > 5000)]
+
+        if df_hist is not None and not df_hist.empty:
+            fig_history = px.line(
+                df_hist,
+                x="snapshot_time",
+                y="place_in_queue",
+                color="apartment_id",
+                hover_name="apartment_id",
+                labels={"place_in_queue": "Place in queue"},
+                markers=True,
+            )
+            fig_history.update_yaxes(autorange=True)
+            fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+        else:
+            fig_history = px.line()
+            fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
     else:
         fig_history = px.line()
         fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
 
     # prepare s.dk history figure (use min queue value)
     if sdk_history is not None and not sdk_history.empty:
-        fig_sdk = px.line(
-            sdk_history,
-            x="snapshot_time",
-            y="place_in_queue",
-            color="apartment_id",
-            hover_name="apartment_id",
-            labels={"place_in_queue": "Place in queue"},
-            markers=True,
-        )
-        fig_sdk.update_yaxes(autorange="reversed")
-        fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+        df_sdk_hist = sdk_history.copy()
+        if "place_in_queue" in df_sdk_hist.columns:
+            df_sdk_hist["place_in_queue"] = pd.to_numeric(df_sdk_hist["place_in_queue"], errors="coerce")
+            df_sdk_hist = df_sdk_hist[~(df_sdk_hist["place_in_queue"] > 5000)]
+
+        if df_sdk_hist is not None and not df_sdk_hist.empty:
+            fig_sdk = px.line(
+                df_sdk_hist,
+                x="snapshot_time",
+                y="place_in_queue",
+                color="apartment_id",
+                hover_name="apartment_id",
+                labels={"place_in_queue": "Place in queue"},
+                markers=True,
+            )
+            fig_sdk.update_yaxes(autorange=True)
+            fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+        else:
+            fig_sdk = px.line()
+            fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
     else:
         fig_sdk = px.line()
         fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
@@ -94,6 +113,8 @@ def make_app(data_dir: str = "data"):
             df_lowest["snapshot_time"] = pd.to_datetime(df_lowest["snapshot_time"], errors="coerce")
         if "place_in_queue" in df_lowest.columns:
             df_lowest["place_in_queue"] = pd.to_numeric(df_lowest["place_in_queue"], errors="coerce")
+            # ignore very large queue placements (user doesn't care about them)
+            df_lowest = df_lowest[~(df_lowest["place_in_queue"] > 5000)]
         try:
             # overall minimum per snapshot
             df_min = df_lowest.groupby("snapshot_time", as_index=False)["place_in_queue"].min().sort_values("snapshot_time")
@@ -388,10 +409,15 @@ def make_app(data_dir: str = "data"):
     def update_history(active_cell, kab_table_data, show_all_values):
         # choose full history when toggle is set, else use the filtered (changing) view
         current_history = kab_history_full if (show_all_values and 'all' in show_all_values and kab_history_full is not None) else kab_history
+        # always ignore apartments with extremely large queue placements
         if current_history is None or current_history.empty:
             empty_fig = px.line()
             empty_fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
             return empty_fig
+        current_history = current_history.copy()
+        if "place_in_queue" in current_history.columns:
+            current_history["place_in_queue"] = pd.to_numeric(current_history["place_in_queue"], errors="coerce")
+            current_history = current_history[~(current_history["place_in_queue"] > 5000)]
 
         selected_id = None
         if active_cell and kab_table_data:
@@ -414,7 +440,7 @@ def make_app(data_dir: str = "data"):
             hover_name="apartment_id",
             markers=True,
         )
-        fig.update_yaxes(autorange="reversed")
+        fig.update_yaxes(autorange=True)
         fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
 
         return fig
@@ -425,10 +451,15 @@ def make_app(data_dir: str = "data"):
     )
     def update_sdk_history(show_all_values):
         current_history = sdk_history_full if (show_all_values and 'all' in show_all_values and sdk_history_full is not None) else sdk_history
+        # ignore apartments with extremely large queue placements
         if current_history is None or current_history.empty:
             empty_fig = px.line()
             empty_fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
             return empty_fig
+        current_history = current_history.copy()
+        if "place_in_queue" in current_history.columns:
+            current_history["place_in_queue"] = pd.to_numeric(current_history["place_in_queue"], errors="coerce")
+            current_history = current_history[~(current_history["place_in_queue"] > 5000)]
 
         fig = px.line(
             current_history,
@@ -438,7 +469,7 @@ def make_app(data_dir: str = "data"):
             hover_name="apartment_id",
             markers=True,
         )
-        fig.update_yaxes(autorange="reversed")
+        fig.update_yaxes(autorange=True)
         fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
         return fig
 
