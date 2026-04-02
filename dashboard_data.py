@@ -739,9 +739,25 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
                 except Exception:
                     lowest_place = None
 
+        # For KAB, rows may represent grouped apartments. Use the
+        # `tenancy_count` column (when available) to compute the actual
+        # apartment count. Fall back to row-count when tenancy_count is
+        # missing or cannot be parsed.
+        n_listings_value = None
+        if name == "kab" and "tenancy_count" in df.columns:
+            try:
+                tc = pd.to_numeric(df["tenancy_count"], errors="coerce")
+                # Treat missing tenancy_count as a single apartment
+                tc = tc.fillna(1)
+                n_listings_value = int(tc.sum())
+            except Exception:
+                n_listings_value = int(len(df))
+        else:
+            n_listings_value = int(len(df))
+
         return {
             "dataset": name,
-            "n_listings": int(len(df)),
+            "n_listings": n_listings_value,
             "nearest_eta": None,
             "lowest_place_in_queue": lowest_place,
             "newest_snapshot": newest_snapshot,
