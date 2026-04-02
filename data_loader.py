@@ -38,7 +38,7 @@ def _parse_timestamp_from_filename(path: str) -> Union[pd.Timestamp, NaTType]:
     m = _TIMESTAMP_RE.search(name)
     if m:
         try:
-            return pd.to_datetime(m.group(1), format="%Y-%m-%d_%H:%M:%S")
+            return pd.to_datetime(m.group(1), format="%Y-%m-%d_%H-%M-%S")
         except Exception:
             return pd.to_datetime(m.group(1), errors="coerce")
 
@@ -92,7 +92,7 @@ def _load_and_tag(
 def load_s_dk_clean_data(data_dir: str = "data") -> pd.DataFrame:
     """Load all cleaned s.dk tenancy snapshots from `data_dir`.
 
-    Matches files like: `data/s_dk_tenancies_[%Y-%m-%d_%H:%M:%S]_clean.csv`.
+    Matches files like: `data/s_dk_tenancies_[%Y-%m-%d_%H-%M-%S]_clean.csv`.
     """
     pattern = os.path.join(data_dir, "s_dk_tenancies*_clean.csv")
     return _load_and_tag(pattern, source="s_dk")
@@ -101,7 +101,7 @@ def load_s_dk_clean_data(data_dir: str = "data") -> pd.DataFrame:
 def load_kab_clean_data(data_dir: str = "data") -> pd.DataFrame:
     """Load all cleaned KAB tenancy snapshots from `data_dir`.
 
-    Matches files like: `data/kab_tenancies_[%Y-%m-%d_%H:%M:%S]_clean.csv`.
+    Matches files like: `data/kab_tenancies_[%Y-%m-%d_%H-%M-%S]_clean.csv`.
     """
     pattern = os.path.join(data_dir, "kab_tenancies*_clean.csv")
     return _load_and_tag(pattern, source="kab")

@@ -57,6 +57,7 @@ def make_app(data_dir: str = "data"):
             color="apartment_id",
             hover_name="apartment_id",
             labels={"place_in_queue": "Place in queue"},
+            markers=True,
         )
         fig_history.update_yaxes(autorange="reversed")
         fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
@@ -73,6 +74,7 @@ def make_app(data_dir: str = "data"):
             color="apartment_id",
             hover_name="apartment_id",
             labels={"place_in_queue": "Place in queue"},
+            markers=True,
         )
         fig_sdk.update_yaxes(autorange="reversed")
         fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
@@ -128,7 +130,7 @@ def make_app(data_dir: str = "data"):
             # format snapshot_time for display
             if "snapshot_time" in df_lowest_table.columns:
                 df_lowest_table["snapshot_time"] = pd.to_datetime(df_lowest_table["snapshot_time"], errors="coerce")
-                df_lowest_table["snapshot_time"] = df_lowest_table["snapshot_time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+                df_lowest_table["snapshot_time"] = df_lowest_table["snapshot_time"].dt.strftime("%Y-%m-%d %H-%M-%S")
 
             lowest_table_columns = [{"name": c, "id": c} for c in df_lowest_table.columns]
             lowest_table_data = df_lowest_table.to_dict("records")
@@ -410,6 +412,7 @@ def make_app(data_dir: str = "data"):
             y="place_in_queue",
             color="apartment_id",
             hover_name="apartment_id",
+            markers=True,
         )
         fig.update_yaxes(autorange="reversed")
         fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
@@ -433,6 +436,7 @@ def make_app(data_dir: str = "data"):
             y="place_in_queue",
             color="apartment_id",
             hover_name="apartment_id",
+            markers=True,
         )
         fig.update_yaxes(autorange="reversed")
         fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')

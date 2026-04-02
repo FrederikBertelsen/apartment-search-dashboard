@@ -10,4 +10,4 @@ printf '\n####################################################\n    [%s]\n######
 python3 /app/kab_data.py >> "$LOG_FILE" 2>&1
 python3 /app/s_dk_data.py >> "$LOG_FILE" 2>&1
 
-echo "Scrape finished at $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
+echo "Scrape finished at $(date '+%Y-%m-%d %H-%M-%S')" >> "$LOG_FILE"

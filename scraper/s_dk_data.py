@@ -161,7 +161,7 @@ def main():
             # print(f"deleted_count: {deleted_count}")
             # exit()
         
-    today_date_time = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+    today_date_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     csv_path = f"data/s_dk_tenancies_{today_date_time}.csv"
     
     print(f"Saving data to '{csv_path}'")
