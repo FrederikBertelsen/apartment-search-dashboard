@@ -141,11 +141,13 @@ def make_app(data_dir: str = "data"):
                 df_avg10["snapshot_time"] = pd.to_datetime(df_avg10["snapshot_time"], errors="coerce")
 
             df_min_table = df_min.rename(columns={"place_in_queue": "lowest_place_in_queue"})
-            df_lowest_table = pd.merge(df_min_table, df_avg10, on="snapshot_time", how="outer").sort_values("snapshot_time")
+            # show newest rows first in the table (newest on top)
+            df_lowest_table = pd.merge(df_min_table, df_avg10, on="snapshot_time", how="outer").sort_values("snapshot_time", ascending=False)
 
             # if the merged table is empty but we have raw snapshot times, build rows with NaNs
             if df_lowest_table.empty and "snapshot_time" in df_lowest.columns:
-                times = sorted(df_lowest["snapshot_time"].dropna().unique())
+                # ensure newest snapshot times are first for the table
+                times = sorted(df_lowest["snapshot_time"].dropna().unique(), reverse=True)
                 df_lowest_table = pd.DataFrame({"snapshot_time": times})
 
             # format snapshot_time for display
@@ -260,7 +262,16 @@ def make_app(data_dir: str = "data"):
         for r in price_table_data:
             r.setdefault("open_url", "open link")
         # include the `source` column in the price table; hide internal apartment_id and url
-        price_table_columns = [{"name": c, "id": c} for c in price_table.columns if c not in ("apartment_id", "url")]
+        price_cols = [c for c in price_table.columns if c not in ("apartment_id", "url")]
+        # ensure `place_in_queue` is visible and placed right after `price_per_m2` for quick scanning
+        if "price_per_m2" in price_cols and "place_in_queue" in price_cols:
+            price_cols.remove("place_in_queue")
+            try:
+                idx = price_cols.index("price_per_m2")
+            except ValueError:
+                idx = len(price_cols) - 1
+            price_cols.insert(idx + 1, "place_in_queue")
+        price_table_columns = [{"name": c, "id": c} for c in price_cols]
         price_table_columns.append({"name": "Open", "id": "open_url"})
     else:
         price_table_data = []
