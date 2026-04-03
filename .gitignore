@@ -228,3 +228,5 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python,macos,visualstudiocode
 /scraper/cookies
 /scraper/data
+/data
+/cookies

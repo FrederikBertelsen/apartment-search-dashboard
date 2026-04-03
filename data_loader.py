@@ -25,26 +25,32 @@ from typing import Callable, Optional, Union
 import pandas as pd
 from pandas._libs.tslibs.nattype import NaTType
 
-_TIMESTAMP_RE = re.compile(r"(\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})")
+_TIMESTAMP_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 
 
 def _parse_timestamp_from_filename(path: str) -> Union[pd.Timestamp, NaTType]:
-    """Extract a timestamp from `path` using the expected filename pattern.
+    """Extract a date (day precision) from `path`.
 
-    If no timestamp is present the function falls back to the file's
-    modification time. Returns `pd.NaT` if neither are available.
+    If a timestamp/date is present the date component is used and normalized
+    to midnight (time-of-day dropped). If no date is present the function
+    falls back to the file's modification date. Returns `pd.NaT` if neither
+    are available.
     """
     name = os.path.basename(path)
     m = _TIMESTAMP_RE.search(name)
     if m:
+        # parse only the date portion and normalize to midnight
         try:
-            return pd.to_datetime(m.group(1), format="%Y-%m-%d_%H-%M-%S")
+            ts = pd.to_datetime(m.group(1), format="%Y-%m-%d", errors="coerce")
         except Exception:
-            return pd.to_datetime(m.group(1), errors="coerce")
+            ts = pd.to_datetime(m.group(1), errors="coerce")
+        if pd.isna(ts):
+            return pd.NaT
+        return ts.normalize()
 
     try:
         ts = datetime.fromtimestamp(os.path.getmtime(path))
-        return pd.to_datetime(ts)
+        return pd.to_datetime(ts).normalize()
     except Exception:
         return pd.NaT
 

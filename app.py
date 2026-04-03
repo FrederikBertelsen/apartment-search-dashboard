@@ -68,12 +68,15 @@ def make_app(data_dir: str = "data"):
             )
             fig_history.update_yaxes(autorange=True)
             fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_history.update_xaxes(tickformat="%Y-%m-%d")
         else:
             fig_history = px.line()
             fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_history.update_xaxes(tickformat="%Y-%m-%d")
     else:
         fig_history = px.line()
         fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+        fig_history.update_xaxes(tickformat="%Y-%m-%d")
 
     # prepare s.dk history figure (use min queue value)
     if sdk_history is not None and not sdk_history.empty:
@@ -94,12 +97,15 @@ def make_app(data_dir: str = "data"):
             )
             fig_sdk.update_yaxes(autorange=True)
             fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_sdk.update_xaxes(tickformat="%Y-%m-%d")
         else:
             fig_sdk = px.line()
             fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_sdk.update_xaxes(tickformat="%Y-%m-%d")
     else:
         fig_sdk = px.line()
         fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+        fig_sdk.update_xaxes(tickformat="%Y-%m-%d")
 
     # prepare KAB lowest-queue history figure (overall min + avg of lowest 10 per snapshot)
     df_for_lowest = kab_history_full if (kab_history_full is not None and not kab_history_full.empty) else kab_history
@@ -153,7 +159,7 @@ def make_app(data_dir: str = "data"):
             # format snapshot_time for display
             if "snapshot_time" in df_lowest_table.columns:
                 df_lowest_table["snapshot_time"] = pd.to_datetime(df_lowest_table["snapshot_time"], errors="coerce")
-                df_lowest_table["snapshot_time"] = df_lowest_table["snapshot_time"].dt.strftime("%Y-%m-%d %H-%M-%S")
+                df_lowest_table["snapshot_time"] = df_lowest_table["snapshot_time"].dt.strftime("%Y-%m-%d")
 
             lowest_table_columns = [{"name": c, "id": c} for c in df_lowest_table.columns]
             lowest_table_data = df_lowest_table.to_dict("records")
@@ -186,6 +192,7 @@ def make_app(data_dir: str = "data"):
                 )
             fig_lowest.update_yaxes(autorange=True)
             fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_lowest.update_xaxes(tickformat="%Y-%m-%d")
         elif not plot_avg.empty:
             fig_lowest = px.line(
                 plot_avg,
@@ -199,9 +206,11 @@ def make_app(data_dir: str = "data"):
                 fig_lowest.data[0].showlegend = True
             fig_lowest.update_yaxes(autorange=True)
             fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_lowest.update_xaxes(tickformat="%Y-%m-%d")
         else:
             fig_lowest = px.line()
             fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_lowest.update_xaxes(tickformat="%Y-%m-%d")
     else:
         fig_lowest = px.line()
         fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
@@ -282,8 +291,13 @@ def make_app(data_dir: str = "data"):
 
     # top10 ETA columns (use the prepared order from dashboard_data)
     if top10_eta is not None and not top10_eta.empty:
-        top10_columns = [{"name": c, "id": c} for c in top10_eta.columns if c != "apartment_id"]
-        top10_data = top10_eta.to_dict("records")
+        top10_df = top10_eta.copy()
+        if "last_snapshot" in top10_df.columns:
+            top10_df["last_snapshot"] = pd.to_datetime(top10_df["last_snapshot"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
+        if "eta" in top10_df.columns:
+            top10_df["eta"] = pd.to_datetime(top10_df["eta"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
+        top10_columns = [{"name": c, "id": c} for c in top10_df.columns if c != "apartment_id"]
+        top10_data = top10_df.to_dict("records")
     else:
         top10_columns = []
         top10_data = []
@@ -453,6 +467,7 @@ def make_app(data_dir: str = "data"):
         )
         fig.update_yaxes(autorange=True)
         fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
+        fig.update_xaxes(tickformat="%Y-%m-%d")
 
         return fig
     # callback: update s.dk history (separate function, not nested)
@@ -482,6 +497,7 @@ def make_app(data_dir: str = "data"):
         )
         fig.update_yaxes(autorange=True)
         fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
+        fig.update_xaxes(tickformat="%Y-%m-%d")
         return fig
 
     # clientside callbacks to open external URLs when user clicks the 'Open' cell

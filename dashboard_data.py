@@ -691,8 +691,18 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
         newest_snapshot = None
         if "snapshot_time" in df.columns and df["snapshot_time"].notna().any():
             try:
-                newest_snapshot = pd.to_datetime(df["snapshot_time"]).max()
-                newest_snapshot = newest_snapshot.isoformat()
+                ns = pd.to_datetime(df["snapshot_time"], errors="coerce").max()
+                if pd.isna(ns):
+                    newest_snapshot = None
+                else:
+                    try:
+                        newest_snapshot = pd.to_datetime(ns).strftime("%Y-%m-%d")
+                    except Exception:
+                        # fallback to date isoformat
+                        try:
+                            newest_snapshot = pd.to_datetime(ns).date().isoformat()
+                        except Exception:
+                            newest_snapshot = None
             except Exception:
                 newest_snapshot = None
 
