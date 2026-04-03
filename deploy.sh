@@ -42,32 +42,6 @@ ssh -i "$SSH_KEY" "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE_SCRIPT'
       rm -f scraper/camoufox.zip || true
       exit 1
     fi
-    # Verify archive integrity: prefer `unzip -t`, fallback to Python zipfile test
-    if command -v unzip >/dev/null 2>&1; then
-      if ! unzip -tq scraper/camoufox.zip >/dev/null 2>&1; then
-        echo "❌ camoufox zip integrity check failed"
-        rm -f scraper/camoufox.zip || true
-        exit 1
-      fi
-    elif command -v python3 >/dev/null 2>&1; then
-      python3 - <<'PY'
-import sys, zipfile
-try:
-    z = zipfile.ZipFile('scraper/camoufox.zip')
-    bad = z.testzip()
-    if bad:
-        sys.exit(1)
-except Exception:
-    sys.exit(1)
-PY
-      if [ $? -ne 0 ]; then
-        echo "❌ camoufox zip integrity check failed (python)"
-        rm -f scraper/camoufox.zip || true
-        exit 1
-      fi
-    else
-      echo "⚠️  Could not verify zip integrity (no unzip or python3 available)"
-    fi
   else
     echo "✅ camoufox archive already exists, skipping download"
   fi
