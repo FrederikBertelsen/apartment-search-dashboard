@@ -22,17 +22,16 @@ COPY scraper/ /app/
 
 RUN mkdir -p /app/logs /app/data /app/cookies
 
-# Attempt to fetch camoufox browser if camoufox is used. Retry transient SSL failures.
+# Use pre-downloaded camoufox archive from project tree if available.
+# If the file is absent, this step logs and continues. No network fallback.
 RUN set -eux; \
-  attempts=0; \
-  max_attempts=5; \
-  until [ "$attempts" -ge "$max_attempts" ]; do \
-    attempts=$((attempts + 1)); \
-    python3 -m camoufox fetch && break || echo "camoufox fetch failed on attempt $attempts/$max_attempts"; \
-    sleep 5; \
-  done; \
-  if [ "$attempts" -ge "$max_attempts" ]; then \
-    echo "camoufox fetch failed after $max_attempts attempts, continuing without failing build"; \
+  if [ -f /app/camoufox.zip ] && [ -s /app/camoufox.zip ]; then \
+    echo "Using project-provided camoufox archive"; \
+    mkdir -p /root/.cache/camoufox; \
+    cp /app/camoufox.zip /root/.cache/camoufox/; \
+    python3 -m camoufox install /root/.cache/camoufox/camoufox.zip || true; \
+  else \
+    echo "camoufox archive missing; skipping install"; \
   fi
 
 RUN chmod +x /app/entrypoint.sh

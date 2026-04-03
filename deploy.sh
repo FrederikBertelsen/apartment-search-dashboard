@@ -27,11 +27,53 @@ ssh -i "$SSH_KEY" "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE_SCRIPT'
   
   echo "📂 Current directory: $(pwd)"
   
-  echo "�🛑 Stopping containers..."
-  docker compose down
-  
   echo "📥 Pulling latest changes..."
   git pull
+
+  # Pre-download camoufox relapse-free build asset (optional but recommended)
+  if [ ! -f "scraper/camoufox.zip" ]; then
+    echo "⬇️  Downloading camoufox archive for Docker build..."
+    mkdir -p scraper
+    curl --fail --show-error -L --retry 8 --retry-delay 5 -o scraper/camoufox.zip \
+      "https://github.com/daijro/camoufox/releases/download/v135.0.1-beta.24/camoufox-135.0.1-beta.24-lin.x86_64.zip"
+    # Ensure the file exists and is non-empty
+    if [ ! -s scraper/camoufox.zip ]; then
+      echo "❌ camoufox download failed or file is empty"
+      rm -f scraper/camoufox.zip || true
+      exit 1
+    fi
+    # Verify archive integrity: prefer `unzip -t`, fallback to Python zipfile test
+    if command -v unzip >/dev/null 2>&1; then
+      if ! unzip -tq scraper/camoufox.zip >/dev/null 2>&1; then
+        echo "❌ camoufox zip integrity check failed"
+        rm -f scraper/camoufox.zip || true
+        exit 1
+      fi
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 - <<'PY'
+import sys, zipfile
+try:
+    z = zipfile.ZipFile('scraper/camoufox.zip')
+    bad = z.testzip()
+    if bad:
+        sys.exit(1)
+except Exception:
+    sys.exit(1)
+PY
+      if [ $? -ne 0 ]; then
+        echo "❌ camoufox zip integrity check failed (python)"
+        rm -f scraper/camoufox.zip || true
+        exit 1
+      fi
+    else
+      echo "⚠️  Could not verify zip integrity (no unzip or python3 available)"
+    fi
+  else
+    echo "✅ camoufox archive already exists, skipping download"
+  fi
+
+  echo "🛑 Stopping containers..."
+  docker compose down
   
   echo "🏗️  Rebuilding both images (web + scraper)..."
   docker compose build --no-cache web scraper
