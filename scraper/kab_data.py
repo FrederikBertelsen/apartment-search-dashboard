@@ -46,7 +46,8 @@ def main():
             success_selector="#brugerButton",
             success_url_contains="Min-side",
             post_login_url="https://www.kab-selvbetjening.dk/Ansoger/Min-side",
-            cookies_file="cookies/kab_cookies.json"):
+            # cookies_file="cookies/kab_cookies.json"
+        ):
 
             print("Failed to login")
             exit(1)

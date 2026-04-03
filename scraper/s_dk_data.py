@@ -54,7 +54,7 @@ def main():
                 success_selector="a[href='/studiebolig/logout/']",
                 success_url_contains="/studiebolig/home/",
 
-                cookies_file="cookies/s_dk_cookies.json"
+                # cookies_file="cookies/s_dk_cookies.json"
                 ):
             print("Failed to log in")
             exit(1)
