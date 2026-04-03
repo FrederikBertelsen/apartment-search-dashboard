@@ -34,7 +34,7 @@ ssh -i "$SSH_KEY" "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE_SCRIPT'
   git pull
   
   echo "🏗️  Rebuilding both images (web + scraper)..."
-  docker compose build web scraper
+  docker compose build --no-cache web scraper
   
   echo "🚀 Starting web container only..."
   docker compose up -d --no-build --force-recreate web
