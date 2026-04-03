@@ -33,7 +33,7 @@ def main():
 
     dc = DataCollector(print_on_flush=True, print_columns=["place_in_queue","company","department"])
 
-    with BrowserWrapper().start_browser(headless=True, humanize=False) as browser:
+    with BrowserWrapper().start_browser(headless=True, block_images=True) as browser:
         page = browser.new_page()
 
         if not page.login(

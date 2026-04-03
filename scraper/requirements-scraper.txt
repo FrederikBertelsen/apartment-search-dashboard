@@ -1,6 +1,4 @@
 python-dotenv
-camoufox
 web-automator @ git+https://github.com/FrederikBertelsen/web-automator.git
-playwright
-camoufox
+playwright==1.58.2
 pandas

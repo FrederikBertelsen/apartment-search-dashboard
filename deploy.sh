@@ -30,22 +30,6 @@ ssh -i "$SSH_KEY" "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE_SCRIPT'
   echo "📥 Pulling latest changes..."
   git pull
 
-  # Pre-download camoufox relapse-free build asset (optional but recommended)
-  if [ ! -f "scraper/camoufox.zip" ]; then
-    echo "⬇️  Downloading camoufox archive for Docker build..."
-    mkdir -p scraper
-    curl --fail --show-error -L --retry 8 --retry-delay 5 -o scraper/camoufox.zip \
-      "https://github.com/daijro/camoufox/releases/download/v135.0.1-beta.24/camoufox-135.0.1-beta.24-lin.x86_64.zip"
-    # Ensure the file exists and is non-empty
-    if [ ! -s scraper/camoufox.zip ]; then
-      echo "❌ camoufox download failed or file is empty"
-      rm -f scraper/camoufox.zip || true
-      exit 1
-    fi
-  else
-    echo "✅ camoufox archive already exists, skipping download"
-  fi
-
   echo "🛑 Stopping containers..."
   docker compose down
   

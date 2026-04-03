@@ -14,6 +14,8 @@ services:
     build:
       context: .
       dockerfile: scraper/Dockerfile
+    init: true
+    ipc: host
     volumes:
       - ./data:/app/data
       - ./cookies:/app/cookies
