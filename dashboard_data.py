@@ -563,9 +563,13 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
     # that lack an ETA but appear in the history plot.
 
     # merge place_change_30d and identification metadata from latest KAB data
+    # Use suffixes so existing `company`/`department`/`tenancy_count` values
+    # produced by `estimate_eta_to_zero` are preserved (they become the
+    # primary columns) and the merged metadata is available as `_meta`
+    # columns for coalescing/fallback.
     if not kab_latest.empty and "place_change_30d" in kab_latest.columns:
         meta = kab_latest[["apartment_id", "company", "department", "tenancy_count", "place_change_30d"]].copy()
-        top10_eta = top10_eta.merge(meta, on="apartment_id", how="left")
+        top10_eta = top10_eta.merge(meta, on="apartment_id", how="left", suffixes=("", "_meta"))
 
     # normalize metadata columns so they are display-friendly (avoid all-NaN columns)
     if not top10_eta.empty:
