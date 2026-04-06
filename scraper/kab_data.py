@@ -52,11 +52,30 @@ def main():
             print("Failed to login")
             exit(1)
 
-        page.goto("https://www.kab-selvbetjening.dk/Ansoger/Min-side/Boligoensker")
-        page.wait_for_idle()
-        page.sleep(10000)
+        tries = 0
+        building_rows = []
+        queue_placements_loading = True
+        while queue_placements_loading:
+            page.goto("https://www.kab-selvbetjening.dk/Ansoger/Min-side/Boligoensker")
+            page.wait_for_idle()
+            page.sleep(10000)
 
-        building_rows = page.locator("tr[data-lejemaalgruppe-id]").all()
+            for i in range(3):
+                building_rows = page.locator("tr[data-lejemaalgruppe-id]").all()
+                if "beregner placering" in building_rows[0].locator("td").nth(1).inner_text().lower().strip():
+                    if i >= 2:
+                        if tries >= 3:
+                            print("Failed to load building data after multiple tries, exiting")
+                            exit(1)
+                        print("Building data is still loading after multiple tries, refreshing page and trying again")
+                        tries += 1
+                        continue
+                    page.sleep(10000)
+                else:
+                    queue_placements_loading = False
+                    break
+
+
         print(f"Found {len(building_rows)} applied buildings")
 
         for building_row in building_rows:
