@@ -122,6 +122,55 @@ def dedupe_latest_by_id(df: pd.DataFrame, time_col: str = "snapshot_time") -> pd
     return df
 
 
+def filter_to_latest_dataset(df: pd.DataFrame) -> pd.DataFrame:
+    """Return only rows belonging to the newest snapshot dataset.
+
+    The cleaned data loader concatenates multiple snapshot files into a single
+    DataFrame. For the dashboard "Latest (one row per apartment, newest)"
+    tables we want rows from the newest snapshot *file* only (per source).
+
+    If a listing/apartment is not present in the newest snapshot file, it
+    should not be shown in the Latest table.
+    """
+    if df is None or df.empty:
+        return df
+
+    if "source_file" in df.columns and df["source_file"].notna().any():
+        files = pd.Series(df["source_file"].dropna().astype(str).unique())
+
+        # Prefer full timestamp in filenames like: *_2026-04-04_02-00-23_*.csv
+        ts_pat = re.compile(r"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})")
+        date_pat = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+        def _file_ts(name: str) -> pd.Timestamp:
+            m = ts_pat.search(name)
+            if m:
+                return pd.to_datetime(m.group(1), format="%Y-%m-%d_%H-%M-%S", errors="coerce")
+            m = date_pat.search(name)
+            if m:
+                return pd.to_datetime(m.group(1), format="%Y-%m-%d", errors="coerce")
+            return pd.NaT
+
+        file_ts_map = {f: _file_ts(f) for f in files.tolist()}
+        valid = [(f, t) for f, t in file_ts_map.items() if pd.notna(t)]
+        if valid:
+            latest_file = max(valid, key=lambda ft: ft[1])[0]
+        else:
+            # Fallback: newest by lexicographic sort of filename
+            latest_file = sorted(file_ts_map.keys())[-1]
+
+        return df[df["source_file"].astype(str) == str(latest_file)].copy()
+
+    # Fallback if source_file is missing: filter by max snapshot_time.
+    if "snapshot_time" in df.columns and df["snapshot_time"].notna().any():
+        snap = pd.to_datetime(df["snapshot_time"], errors="coerce")
+        mx = snap.max()
+        if pd.notna(mx):
+            return df[snap == mx].copy()
+
+    return df
+
+
 def compute_price_per_m2_kab(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     # ensure numeric inputs
@@ -371,9 +420,14 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
             else:
                 place_change_map[aid] = 0.0
 
-    # newest per apartment
-    kab_latest = dedupe_latest_by_id(kab, time_col="snapshot_time")
-    sdk_latest = dedupe_latest_by_id(sdk, time_col="snapshot_time")
+    # Latest tables should reflect ONLY the newest snapshot dataset per source.
+    # (If an apartment isn't in the newest dataset, it should not be shown.)
+    kab_latest_src = filter_to_latest_dataset(kab)
+    sdk_latest_src = filter_to_latest_dataset(sdk)
+
+    # newest per apartment within the newest dataset
+    kab_latest = dedupe_latest_by_id(kab_latest_src, time_col="snapshot_time")
+    sdk_latest = dedupe_latest_by_id(sdk_latest_src, time_col="snapshot_time")
 
     # Normalize KAB building URLs: prepend base when URL appears relative
     kab_base = "https://www.kab-selvbetjening.dk"
@@ -677,6 +731,15 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
     for col in ["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days"]:
         if col not in top10_eta.columns:
             top10_eta[col] = None
+
+    # Ensure Top-10 ETA reflects only apartments present in the newest KAB
+    # snapshot dataset (consistent with the "Latest" tables behavior).
+    if not top10_eta.empty and not kab_latest.empty and "apartment_id" in kab_latest.columns:
+        try:
+            latest_ids = set(kab_latest["apartment_id"].dropna().astype(str).tolist())
+            top10_eta = top10_eta[top10_eta["apartment_id"].astype(str).isin(latest_ids)].reset_index(drop=True)
+        except Exception:
+            pass
 
     top10_eta = top10_eta[["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days", "apartment_id"]]
     top10_eta = top10_eta.reset_index(drop=True)

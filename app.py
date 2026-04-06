@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dash
 from dash import dcc, html, Input, Output, dash_table
+from dash.dash_table.Format import Format, Scheme
 import plotly.express as px
 import pandas as pd
 import os
@@ -318,7 +319,23 @@ def make_app(data_dir: str = "data"):
                 top10_df["last_snapshot"] = pd.to_datetime(top10_df["last_snapshot"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
             if "eta" in top10_df.columns:
                 top10_df["eta"] = pd.to_datetime(top10_df["eta"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
-            top10_columns = [{"name": c, "id": c} for c in top10_df.columns if c != "apartment_id"]
+
+            if "slope_per_day" in top10_df.columns:
+                top10_df["slope_per_day"] = pd.to_numeric(top10_df["slope_per_day"], errors="coerce")
+
+            top10_columns = []
+            for c in top10_df.columns:
+                if c == "apartment_id":
+                    continue
+                if c == "slope_per_day":
+                    top10_columns.append({
+                        "name": c,
+                        "id": c,
+                        "type": "numeric",
+                        "format": Format(precision=2, scheme=Scheme.fixed),
+                    })
+                else:
+                    top10_columns.append({"name": c, "id": c})
             top10_data = top10_df.to_dict("records")
         else:
             top10_columns = []
