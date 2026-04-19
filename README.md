@@ -5,7 +5,7 @@ A minimal Dash app with an integrated scraper that visualizes historical apartme
 ## Run the dashboard
 
 ```bash
-docker compose up -d web
+docker compose up -d
 ```
 
 Open http://localhost:8050
