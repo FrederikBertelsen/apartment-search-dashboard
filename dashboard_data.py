@@ -390,7 +390,7 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
       - `sdk_latest`: newest-row-per-apartment for s.dk
       - `price_table`: combined price-per-m2 table (both sources)
       - `kab_history`: full KAB history series (for plotting)
-      - `top10_eta`: top-10 ETA to queue=0 DataFrame
+    - `top30_eta`: top-30 ETA to queue=0 DataFrame
     """
     enable_sdk = os.getenv("ENABLE_SDK", "0").strip().lower() in {"1", "true", "yes", "on"}
     if enable_sdk:
@@ -587,10 +587,14 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
         # round area_m2 for display
         if "area_m2" in price_table.columns:
             price_table["area_m2"] = pd.to_numeric(price_table["area_m2"], errors="coerce").round(2)
-        price_table = price_table.sort_values("price_per_m2", na_position="last").reset_index(drop=True)
+        if "place_in_queue" in price_table.columns:
+            price_table["place_in_queue"] = pd.to_numeric(price_table["place_in_queue"], errors="coerce")
+            price_table = price_table.sort_values(["place_in_queue", "price_per_m2"], na_position="last").reset_index(drop=True)
+        else:
+            price_table = price_table.sort_values("price_per_m2", na_position="last").reset_index(drop=True)
 
-    # compute ETA top10 for KAB (use full history, not just latest)
-    top10_eta = estimate_eta_to_zero(kab)
+    # compute ETA top30 for KAB (use full history, not just latest)
+    top30_eta = estimate_eta_to_zero(kab)
 
     # helper to format ETA as relative years/months/days
     now = pd.Timestamp.now()
@@ -634,17 +638,17 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
         return "<1 day"
 
     # ensure we always have a DataFrame to work with
-    if top10_eta is None or top10_eta.empty:
-        top10_eta = pd.DataFrame(columns=["apartment_id", "last_snapshot", "last_place", "slope_per_day", "days_to_zero", "eta", "company", "department", "tenancy_count"])
+    if top30_eta is None or top30_eta.empty:
+        top30_eta = pd.DataFrame(columns=["apartment_id", "last_snapshot", "last_place", "slope_per_day", "days_to_zero", "eta", "company", "department", "tenancy_count"])
 
     # add human-readable ETA-in string
-    if "eta" in top10_eta.columns:
-        top10_eta["eta_in"] = top10_eta["eta"].apply(_format_eta)
+    if "eta" in top30_eta.columns:
+        top30_eta["eta_in"] = top30_eta["eta"].apply(_format_eta)
     else:
-        top10_eta["eta_in"] = None
+        top30_eta["eta_in"] = None
 
     # NOTE: we intentionally do NOT inject extra placeholder rows into
-    # `top10_eta`. The Top-10 ETA table should show only apartments with
+    # `top30_eta`. The ETA table should show only apartments with
     # a computed ETA (i.e. a valid prediction). This avoids confusing rows
     # that lack an ETA but appear in the history plot.
 
@@ -655,41 +659,41 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
     # columns for coalescing/fallback.
     if not kab_latest.empty and "place_change_30d" in kab_latest.columns:
         meta = kab_latest[["apartment_id", "company", "department", "tenancy_count", "place_change_30d"]].copy()
-        top10_eta = top10_eta.merge(meta, on="apartment_id", how="left", suffixes=("", "_meta"))
+        top30_eta = top30_eta.merge(meta, on="apartment_id", how="left", suffixes=("", "_meta"))
 
     # normalize metadata columns so they are display-friendly (avoid all-NaN columns)
-    if not top10_eta.empty:
+    if not top30_eta.empty:
         for c in ["company", "department"]:
-            if c in top10_eta.columns:
-                top10_eta[c] = top10_eta[c].fillna("")
-        if "tenancy_count" in top10_eta.columns:
+            if c in top30_eta.columns:
+                top30_eta[c] = top30_eta[c].fillna("")
+        if "tenancy_count" in top30_eta.columns:
             # keep tenancy_count as numeric when present, else empty
-            top10_eta["tenancy_count"] = top10_eta["tenancy_count"].where(pd.notna(top10_eta["tenancy_count"]), None)
+            top30_eta["tenancy_count"] = top30_eta["tenancy_count"].where(pd.notna(top30_eta["tenancy_count"]), None)
 
     # add the requested change column name and reorder columns for display
-    if "place_change_30d" in top10_eta.columns:
-        top10_eta["changes_last_30_days"] = top10_eta["place_change_30d"]
+    if "place_change_30d" in top30_eta.columns:
+        top30_eta["changes_last_30_days"] = top30_eta["place_change_30d"]
     else:
-        top10_eta["changes_last_30_days"] = None
+        top30_eta["changes_last_30_days"] = None
 
     # ensure place_change_30d is numeric and filter out apartments that
-    # did not change in the last 30 days — the Top-10 ETA should reflect
+    # did not change in the last 30 days — the Top-30 ETA should reflect
     # recent movement only (user expectation).
-    if "place_change_30d" in top10_eta.columns:
-        top10_eta["place_change_30d"] = pd.to_numeric(top10_eta["place_change_30d"], errors="coerce").fillna(0.0).astype(float)
+    if "place_change_30d" in top30_eta.columns:
+        top30_eta["place_change_30d"] = pd.to_numeric(top30_eta["place_change_30d"], errors="coerce").fillna(0.0).astype(float)
         # keep only apartments with non-zero change in last 30 days
-        top10_eta = top10_eta[top10_eta["place_change_30d"] != 0.0].reset_index(drop=True)
+        top30_eta = top30_eta[top30_eta["place_change_30d"] != 0.0].reset_index(drop=True)
 
     # if some metadata columns are still empty, try to fill them from the
     # latest KAB snapshot as a fallback (ensure human-readable strings)
-    if not top10_eta.empty and not kab_latest.empty:
+    if not top30_eta.empty and not kab_latest.empty:
         try:
             kab_meta_map = kab_latest.set_index("apartment_id")
             for c in ["company", "department"]:
                 if c in kab_meta_map.columns:
-                    top10_eta[c] = top10_eta[c].where(top10_eta[c].notna() & (top10_eta[c] != ""), top10_eta["apartment_id"].map(kab_meta_map[c]).fillna(""))
+                    top30_eta[c] = top30_eta[c].where(top30_eta[c].notna() & (top30_eta[c] != ""), top30_eta["apartment_id"].map(kab_meta_map[c]).fillna(""))
             if "tenancy_count" in kab_meta_map.columns:
-                top10_eta["tenancy_count"] = top10_eta["tenancy_count"].where(pd.notna(top10_eta["tenancy_count"]), top10_eta["apartment_id"].map(kab_meta_map["tenancy_count"]))
+                top30_eta["tenancy_count"] = top30_eta["tenancy_count"].where(pd.notna(top30_eta["tenancy_count"]), top30_eta["apartment_id"].map(kab_meta_map["tenancy_count"]))
         except Exception:
             pass
 
@@ -700,11 +704,11 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
     # Recompute days_to_zero, eta and human-readable eta_in using the
     # slope values computed by `estimate_eta_to_zero`. Do NOT override
     # the slope based on the 30-day change; keep the fitted slope so the
-    # Top-10 reflects the fitted trends from the full history.
-    if not top10_eta.empty:
+    # Top-30 reflects the fitted trends from the full history.
+    if not top30_eta.empty:
         days_list = []
         eta_list = []
-        for _, r in top10_eta.iterrows():
+        for _, r in top30_eta.iterrows():
             slope = r.get("slope_per_day")
             last_place = r.get("last_place")
             last_snapshot = r.get("last_snapshot")
@@ -730,51 +734,70 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
             except Exception:
                 days_list.append(None)
                 eta_list.append(None)
-        top10_eta["days_to_zero"] = days_list
-        top10_eta["eta"] = eta_list
+        top30_eta["days_to_zero"] = days_list
+        top30_eta["eta"] = eta_list
         # update human-readable string
-        if "eta" in top10_eta.columns:
-            top10_eta["eta_in"] = top10_eta["eta"].apply(_format_eta)
+        if "eta" in top30_eta.columns:
+            top30_eta["eta_in"] = top30_eta["eta"].apply(_format_eta)
         else:
-            top10_eta["eta_in"] = None
+            top30_eta["eta_in"] = None
         # sort by ETA (unknowns last)
         try:
-            top10_eta = top10_eta.sort_values("eta", na_position="last").reset_index(drop=True)
+            top30_eta = top30_eta.sort_values("eta", na_position="last").reset_index(drop=True)
         except Exception:
-            top10_eta = top10_eta.reset_index(drop=True)
+            top30_eta = top30_eta.reset_index(drop=True)
 
     # Filter out entries without a valid ETA. Keep ETA rows regardless of
-    # their 30-day change value so the Top-10 reflects fitted trends from
+    # their 30-day change value so the Top-30 reflects fitted trends from
     # the full history (but still show the 30-day change as a column).
-    if not top10_eta.empty:
+    if not top30_eta.empty:
         # ensure numeric column exists and is numeric for display only
-        if "changes_last_30_days" not in top10_eta.columns:
-            top10_eta["changes_last_30_days"] = 0.0
+        if "changes_last_30_days" not in top30_eta.columns:
+            top30_eta["changes_last_30_days"] = 0.0
         else:
-            top10_eta["changes_last_30_days"] = pd.to_numeric(top10_eta["changes_last_30_days"], errors="coerce").fillna(0.0).astype(float)
+            top30_eta["changes_last_30_days"] = pd.to_numeric(top30_eta["changes_last_30_days"], errors="coerce").fillna(0.0).astype(float)
 
         # keep only apartments with a computed ETA
-        if "eta" in top10_eta.columns:
-            top10_eta = top10_eta[top10_eta["eta"].notna()].reset_index(drop=True)
+        if "eta" in top30_eta.columns:
+            top30_eta = top30_eta[top30_eta["eta"].notna()].reset_index(drop=True)
         else:
-            top10_eta = top10_eta.reset_index(drop=True)
+            top30_eta = top30_eta.reset_index(drop=True)
+
+        # keep only apartments that are still under the 5000 placement cutoff
+        if "last_place" in top30_eta.columns:
+            top30_eta["last_place"] = pd.to_numeric(top30_eta["last_place"], errors="coerce")
+            top30_eta = top30_eta[top30_eta["last_place"] < 5000].reset_index(drop=True)
 
     # ensure columns exist and pick order: company, department, tenancy_count, last_place, eta_in, slope_per_day, changes_last_30_days
     for col in ["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days"]:
-        if col not in top10_eta.columns:
-            top10_eta[col] = None
+        if col not in top30_eta.columns:
+            top30_eta[col] = None
 
-    # Ensure Top-10 ETA reflects only apartments present in the newest KAB
+    # Ensure Top-30 ETA reflects only apartments present in the newest KAB
     # snapshot dataset (consistent with the "Latest" tables behavior).
-    if not top10_eta.empty and not kab_latest.empty and "apartment_id" in kab_latest.columns:
+    if not top30_eta.empty and not kab_latest.empty and "apartment_id" in kab_latest.columns:
         try:
             latest_ids = set(kab_latest["apartment_id"].dropna().astype(str).tolist())
-            top10_eta = top10_eta[top10_eta["apartment_id"].astype(str).isin(latest_ids)].reset_index(drop=True)
+            top30_eta = top30_eta[top30_eta["apartment_id"].astype(str).isin(latest_ids)].reset_index(drop=True)
         except Exception:
             pass
 
-    top10_eta = top10_eta[["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days", "apartment_id"]]
-    top10_eta = top10_eta.reset_index(drop=True)
+    if not top30_eta.empty:
+        try:
+            top30_eta = top30_eta.sort_values("eta", na_position="last").head(30).reset_index(drop=True)
+        except Exception:
+            top30_eta = top30_eta.head(30).reset_index(drop=True)
+
+    top30_eta = top30_eta[["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days", "apartment_id"]]
+    top30_eta = top30_eta.reset_index(drop=True)
+
+    kab_history_top_eta = pd.DataFrame()
+    if not top30_eta.empty and not kab_history_full.empty and "apartment_id" in kab_history_full.columns:
+        try:
+            top_ids = set(top30_eta["apartment_id"].dropna().astype(str).tolist())
+            kab_history_top_eta = kab_history_full[kab_history_full["apartment_id"].astype(str).isin(top_ids)].reset_index(drop=True)
+        except Exception:
+            kab_history_top_eta = pd.DataFrame()
 
     # Summary stats (simple) for dashboard
     def _stats_for(df: pd.DataFrame, name: str) -> Dict[str, Any]:
@@ -886,12 +909,12 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
 
     summary_stats = pd.DataFrame(stats_list)
 
-    # nearest ETA (from top10_eta) - use human-readable `eta_in` if available
+    # nearest ETA (from top30_eta) - use human-readable `eta_in` if available
     nearest_eta_str = None
-    if top10_eta is not None and not top10_eta.empty and "eta_in" in top10_eta.columns:
+    if top30_eta is not None and not top30_eta.empty and "eta_in" in top30_eta.columns:
         try:
-            # top10_eta is sorted by ETA; take the first human-readable string
-            nearest_eta_str = top10_eta["eta_in"].iloc[0]
+            # top30_eta is sorted by ETA; take the first human-readable string
+            nearest_eta_str = top30_eta["eta_in"].iloc[0]
         except Exception:
             nearest_eta_str = None
 
@@ -959,9 +982,10 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
         "price_table": price_table,
         "kab_history": kab_history,
         "kab_history_full": kab_history_full,
+        "kab_history_top_eta": kab_history_top_eta,
         "sdk_history": sdk_history,
         "sdk_history_full": sdk_history_full,
-        "top10_eta": top10_eta,
+        "top30_eta": top30_eta,
         "summary_stats": summary_stats,
     }
 

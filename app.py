@@ -4,7 +4,7 @@ This file creates a small Dash app that shows:
 - KAB newest-row table (sorted by `place_in_queue`)
 - s.dk newest-row table (sorted by `place_in_queue`)
 - Combined price-per-m2 table (cheapest first)
-- KAB history multi-line chart and Top-10 ETA table
+- KAB history chart for the top-30 ETA apartments and Top-30 ETA table
 
 Keep the app simple and dependency-light so it's easy to run locally.
 """
@@ -96,41 +96,11 @@ def make_app(data_dir: str = "data"):
         kab_latest = data.get("kab_latest", None)
         sdk_latest = data.get("sdk_latest", None)
         price_table = data.get("price_table", None)
-        kab_history = data.get("kab_history", None)
-        kab_history_full = data.get("kab_history_full", None)
+        kab_history_top_eta = data.get("kab_history_top_eta", None)
         sdk_history = data.get("sdk_history", None)
         sdk_history_full = data.get("sdk_history_full", None)
-        top10_eta = data.get("top10_eta", None)
+        top30_eta = data.get("top30_eta", None)
         summary_stats = data.get("summary_stats", None)
-
-        # build initial figure for KAB history (dark template)
-        if kab_history is not None and not kab_history.empty:
-            df_hist = kab_history.copy()
-            if "place_in_queue" in df_hist.columns:
-                df_hist["place_in_queue"] = pd.to_numeric(df_hist["place_in_queue"], errors="coerce")
-                df_hist = df_hist[~(df_hist["place_in_queue"] > 5000)]
-
-            if df_hist is not None and not df_hist.empty:
-                fig_history = px.line(
-                    df_hist,
-                    x="snapshot_time",
-                    y="place_in_queue",
-                    color="apartment_id",
-                    hover_name="apartment_id",
-                    labels={"place_in_queue": "Place in queue"},
-                    markers=True,
-                )
-                fig_history.update_yaxes(autorange=True)
-                fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
-                fig_history.update_xaxes(tickformat="%Y-%m-%d")
-            else:
-                fig_history = px.line()
-                fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
-                fig_history.update_xaxes(tickformat="%Y-%m-%d")
-        else:
-            fig_history = px.line()
-            fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
-            fig_history.update_xaxes(tickformat="%Y-%m-%d")
 
         # prepare s.dk history figure (use min queue value)
         if sdk_history is not None and not sdk_history.empty:
@@ -162,7 +132,7 @@ def make_app(data_dir: str = "data"):
             fig_sdk.update_xaxes(tickformat="%Y-%m-%d")
 
         # prepare KAB lowest-queue history figure (overall min + avg of lowest 10 per snapshot)
-        df_for_lowest = kab_history_full if (kab_history_full is not None and not kab_history_full.empty) else kab_history
+        df_for_lowest = data.get("kab_history_full", None)
         lowest_table_columns = []
         lowest_table_data = []
 
@@ -322,33 +292,46 @@ def make_app(data_dir: str = "data"):
 
         summary_columns = df_to_columns(summary_stats)
 
-        if top10_eta is not None and not top10_eta.empty:
-            top10_df = top10_eta.copy()
-            if "last_snapshot" in top10_df.columns:
-                top10_df["last_snapshot"] = pd.to_datetime(top10_df["last_snapshot"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
-            if "eta" in top10_df.columns:
-                top10_df["eta"] = pd.to_datetime(top10_df["eta"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
+        if top30_eta is not None and not top30_eta.empty:
+            top30_df = top30_eta.copy()
+            if "slope_per_day" in top30_df.columns:
+                top30_df["slope_per_day"] = pd.to_numeric(top30_df["slope_per_day"], errors="coerce")
 
-            if "slope_per_day" in top10_df.columns:
-                top10_df["slope_per_day"] = pd.to_numeric(top10_df["slope_per_day"], errors="coerce")
-
-            top10_columns = []
-            for c in top10_df.columns:
+            top30_columns = []
+            for c in top30_df.columns:
                 if c == "apartment_id":
                     continue
                 if c == "slope_per_day":
-                    top10_columns.append({
+                    top30_columns.append({
                         "name": c,
                         "id": c,
                         "type": "numeric",
                         "format": Format(precision=2, scheme=Scheme.fixed),
                     })
                 else:
-                    top10_columns.append({"name": c, "id": c})
-            top10_data = top10_df.to_dict("records")
+                    top30_columns.append({"name": c, "id": c})
+            top30_data = top30_df.to_dict("records")
         else:
-            top10_columns = []
-            top10_data = []
+            top30_columns = []
+            top30_data = []
+
+        if kab_history_top_eta is not None and not kab_history_top_eta.empty:
+            fig_history = px.line(
+                kab_history_top_eta,
+                x="snapshot_time",
+                y="place_in_queue",
+                color="apartment_id",
+                hover_name="apartment_id",
+                labels={"place_in_queue": "Place in queue"},
+                markers=True,
+            )
+            fig_history.update_yaxes(autorange=True)
+            fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_history.update_xaxes(tickformat="%Y-%m-%d")
+        else:
+            fig_history = px.line()
+            fig_history.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
+            fig_history.update_xaxes(tickformat="%Y-%m-%d")
 
         tabs = [
                 dcc.Tab(label="Summary", style=tab_style, selected_style=tab_selected_style, children=[
@@ -385,14 +368,13 @@ def make_app(data_dir: str = "data"):
                     ),
                 ]),
                 dcc.Tab(label="KAB History", style=tab_style, selected_style=tab_selected_style, children=[
-                    html.H2("KAB queue history (all apartments)"),
-                    dcc.Checklist(id='kab-show-all', options=[{'label': 'Show all data', 'value': 'all'}], value=[], inline=True),
+                    html.H2("KAB queue history (top 30 ETA apartments)"),
                     dcc.Graph(id="kab-history", figure=fig_history, style={"height": "600px"}),
-                    html.H3("Top-10 ETA to queue = 0 (KAB)"),
+                    html.H3("Top-30 ETA to queue = 0 (KAB)"),
                     dash_table.DataTable(
-                        id="top10-eta",
-                        columns=cast(List[Dict[str, Any]], top10_columns),
-                        data=cast(List[Dict[str, Any]], top10_data),
+                        id="top30-eta",
+                        columns=cast(List[Dict[str, Any]], top30_columns),
+                        data=cast(List[Dict[str, Any]], top30_data),
                         page_action='none',
                         style_table={"overflowX": "auto", "maxWidth": "100%"},
                         style_data_conditional=[
@@ -490,54 +472,6 @@ def make_app(data_dir: str = "data"):
 
     # Use a callable layout so Dash builds it per-request (ensuring fresh data)
     app.layout = create_layout
-
-    # callback: highlight selected apartment(s) from kab table in the history chart
-    @app.callback(
-        Output("kab-history", "figure"),
-        [Input("kab-table", "active_cell"), Input("kab-table", "data"), Input("kab-show-all", "value")],
-    )
-    def update_history(active_cell, kab_table_data, show_all_values):
-        # fetch fresh data (reloads only when files changed)
-        data = get_data_if_new(data_dir)
-        kab_history = data.get("kab_history", None)
-        kab_history_full = data.get("kab_history_full", None)
-
-        current_history = kab_history_full if (show_all_values and 'all' in show_all_values and kab_history_full is not None) else kab_history
-        if current_history is None or current_history.empty:
-            empty_fig = px.line()
-            empty_fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
-            return empty_fig
-        current_history = current_history.copy()
-        if "place_in_queue" in current_history.columns:
-            current_history["place_in_queue"] = pd.to_numeric(current_history["place_in_queue"], errors="coerce")
-            current_history = current_history[~(current_history["place_in_queue"] > 5000)]
-
-        selected_id = None
-        if active_cell and kab_table_data:
-            try:
-                r = kab_table_data[active_cell.get('row')]
-                selected_id = r.get('apartment_id') if isinstance(r, dict) else None
-            except Exception:
-                selected_id = None
-
-        if selected_id:
-            df_plot = current_history[current_history["apartment_id"] == selected_id]
-        else:
-            df_plot = current_history
-
-        fig = px.line(
-            df_plot,
-            x="snapshot_time",
-            y="place_in_queue",
-            color="apartment_id",
-            hover_name="apartment_id",
-            markers=True,
-        )
-        fig.update_yaxes(autorange=True)
-        fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
-        fig.update_xaxes(tickformat="%Y-%m-%d")
-
-        return fig
 
     # callback: update s.dk history (separate function, not nested)
     if ENABLE_SDK:
