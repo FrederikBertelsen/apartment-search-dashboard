@@ -17,6 +17,7 @@ import plotly.express as px
 import pandas as pd
 import os
 import glob
+import logging
 from typing import Any, Dict, List, cast
 
 from dashboard_data import load_and_prepare_all
@@ -25,6 +26,9 @@ from dashboard_data import load_and_prepare_all
 # callback/render unless files in the data directory have changed.
 _CACHED_DATA: dict | None = None
 _CACHED_FILES_STATE: dict | None = None
+_LAST_LOAD_ERROR: str | None = None
+
+logger = logging.getLogger(__name__)
 
 
 def _current_files_state(data_dir: str) -> dict:
@@ -46,7 +50,7 @@ def get_data_if_new(data_dir: str = "data") -> dict:
 
     This is safe to call from request handlers and callbacks.
     """
-    global _CACHED_DATA, _CACHED_FILES_STATE
+    global _CACHED_DATA, _CACHED_FILES_STATE, _LAST_LOAD_ERROR
     try:
         cur = _current_files_state(data_dir)
     except Exception:
@@ -55,11 +59,15 @@ def get_data_if_new(data_dir: str = "data") -> dict:
         # reload and update cache
         try:
             _CACHED_DATA = load_and_prepare_all(data_dir)
+            _CACHED_FILES_STATE = cur
+            _LAST_LOAD_ERROR = None
         except Exception:
-            # if load fails, keep previous cache (if any) to avoid crashing
+            # Keep previous cache (if any) to avoid crashing.
+            # Do not update file state on failure, so the next request retries.
+            logger.exception("Failed to load dashboard data from %s", data_dir)
+            _LAST_LOAD_ERROR = f"Failed to load dashboard data from {data_dir}. Check container logs."
             if _CACHED_DATA is None:
                 _CACHED_DATA = {}
-        _CACHED_FILES_STATE = cur
     return _CACHED_DATA
 
 
@@ -344,6 +352,14 @@ def make_app(data_dir: str = "data"):
         return html.Div([
             html.H1("Apartment Search Dashboard"),
             html.Div(f"Data directory: {data_dir}"),
+            (
+                html.Div(
+                    _LAST_LOAD_ERROR,
+                    style={"backgroundColor": "#4a1f1f", "color": "#ffd7d7", "padding": "10px", "margin": "10px 0", "border": "1px solid #7a2f2f"},
+                )
+                if _LAST_LOAD_ERROR
+                else None
+            ),
             dcc.Tabs([
                 dcc.Tab(label="Summary", style=tab_style, selected_style=tab_selected_style, children=[
                     html.H2("Summary Statistics"),

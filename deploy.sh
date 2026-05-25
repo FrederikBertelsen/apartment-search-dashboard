@@ -30,6 +30,25 @@ ssh -i "$SSH_KEY" "$SERVER_USER@$SERVER_HOST" bash << 'REMOTE_SCRIPT'
   echo "📥 Pulling latest changes..."
   git pull
 
+  echo "📁 Ensuring runtime folders exist..."
+  mkdir -p data logs cookies
+
+  CLEAN_COUNT=$(find data -maxdepth 1 -type f -name "*_clean.csv" | wc -l | tr -d ' ')
+  echo "🧮 Found $CLEAN_COUNT cleaned CSV file(s) in ./data"
+
+  if [ "$CLEAN_COUNT" -eq 0 ]; then
+    echo "⚠️  No cleaned data found. Running scraper once to populate ./data..."
+    docker compose --profile scraper up --build --abort-on-container-exit scraper
+
+    CLEAN_COUNT=$(find data -maxdepth 1 -type f -name "*_clean.csv" | wc -l | tr -d ' ')
+    echo "🧮 Cleaned CSV files after scraper run: $CLEAN_COUNT"
+
+    if [ "$CLEAN_COUNT" -eq 0 ]; then
+      echo "❌ Scraper did not produce cleaned CSV files in ./data"
+      exit 1
+    fi
+  fi
+
   echo "🛑 Stopping containers..."
   docker compose down
   
