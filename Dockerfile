@@ -23,4 +23,4 @@ RUN rm -rf /app/scraper
 
 EXPOSE 8050
 
-CMD ["python3", "app.py"]
+CMD ["gunicorn", "--workers", "1", "--bind", "0.0.0.0:8050", "app:server"]

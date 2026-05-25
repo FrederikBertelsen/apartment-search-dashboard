@@ -607,6 +607,10 @@ def make_app(data_dir: str = "data"):
     return app
 
 
+# WSGI entrypoint for production servers (for example gunicorn).
+app = make_app(os.getenv("DATA_DIR", "data"))
+server = app.server
+
+
 if __name__ == "__main__":
-    app = make_app()
     app.run(host="0.0.0.0", debug=False)

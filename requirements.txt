@@ -1,6 +1,7 @@
 dash
 dash-bootstrap-components
 dotenv
+gunicorn
 numpy
 pandas
 plotly
