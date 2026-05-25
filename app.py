@@ -29,6 +29,7 @@ _CACHED_FILES_STATE: dict | None = None
 _LAST_LOAD_ERROR: str | None = None
 
 logger = logging.getLogger(__name__)
+ENABLE_SDK = os.getenv("ENABLE_SDK", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _current_files_state(data_dir: str) -> dict:
@@ -349,18 +350,7 @@ def make_app(data_dir: str = "data"):
             top10_columns = []
             top10_data = []
 
-        return html.Div([
-            html.H1("Apartment Search Dashboard"),
-            html.Div(f"Data directory: {data_dir}"),
-            (
-                html.Div(
-                    _LAST_LOAD_ERROR,
-                    style={"backgroundColor": "#4a1f1f", "color": "#ffd7d7", "padding": "10px", "margin": "10px 0", "border": "1px solid #7a2f2f"},
-                )
-                if _LAST_LOAD_ERROR
-                else None
-            ),
-            dcc.Tabs([
+        tabs = [
                 dcc.Tab(label="Summary", style=tab_style, selected_style=tab_selected_style, children=[
                     html.H2("Summary Statistics"),
                     dash_table.DataTable(
@@ -432,11 +422,6 @@ def make_app(data_dir: str = "data"):
                         style_header={"backgroundColor": "#222222", "color": "#eaeaea"},
                     ),
                 ]),
-                dcc.Tab(label="s.dk History", style=tab_style, selected_style=tab_selected_style, children=[
-                    html.H2("s.dk queue history (min queue)"),
-                    dcc.Checklist(id='sdk-show-all', options=[{'label': 'Show all data', 'value': 'all'}], value=[], inline=True),
-                    dcc.Graph(id="sdk-history", figure=fig_sdk, style={"height": "600px"}),
-                ]),
                 dcc.Tab(label="KAB Data", style=tab_style, selected_style=tab_selected_style, children=[
                     html.H2("KAB - Latest (one row per apartment, newest)"),
                     html.Div(id="kab-table-container", children=[
@@ -455,6 +440,15 @@ def make_app(data_dir: str = "data"):
                             style_header={"backgroundColor": "#222222", "color": "#eaeaea"},
                         )
                     ]),
+                ]),
+            ]
+
+        if ENABLE_SDK:
+            tabs.extend([
+                dcc.Tab(label="s.dk History", style=tab_style, selected_style=tab_selected_style, children=[
+                    html.H2("s.dk queue history (min queue)"),
+                    dcc.Checklist(id='sdk-show-all', options=[{'label': 'Show all data', 'value': 'all'}], value=[], inline=True),
+                    dcc.Graph(id="sdk-history", figure=fig_sdk, style={"height": "600px"}),
                 ]),
                 dcc.Tab(label="S_DK Data", style=tab_style, selected_style=tab_selected_style, children=[
                     html.H2("s.dk - Latest (one row per apartment, newest)"),
@@ -475,9 +469,22 @@ def make_app(data_dir: str = "data"):
                         )
                     ]),
                 ]),
-            ], style={"backgroundColor": "#222222", "color": "#eaeaea"}),
+            ])
+
+        return html.Div([
+            html.H1("Apartment Search Dashboard"),
+            html.Div(f"Data directory: {data_dir}"),
+            (
+                html.Div(
+                    _LAST_LOAD_ERROR,
+                    style={"backgroundColor": "#4a1f1f", "color": "#ffd7d7", "padding": "10px", "margin": "10px 0", "border": "1px solid #7a2f2f"},
+                )
+                if _LAST_LOAD_ERROR
+                else None
+            ),
+            dcc.Tabs(tabs, style={"backgroundColor": "#222222", "color": "#eaeaea"}),
             html.Div(id='open-url-kab', style={'display': 'none'}),
-            html.Div(id='open-url-sdk', style={'display': 'none'}),
+            html.Div(id='open-url-sdk', style={'display': 'none'}) if ENABLE_SDK else None,
             html.Div(id='open-url-price', style={'display': 'none'}),
         ], style=page_style)
 
@@ -533,37 +540,38 @@ def make_app(data_dir: str = "data"):
         return fig
 
     # callback: update s.dk history (separate function, not nested)
-    @app.callback(
-        Output("sdk-history", "figure"),
-        [Input("sdk-show-all", "value")],
-    )
-    def update_sdk_history(show_all_values):
-        data = get_data_if_new(data_dir)
-        sdk_history = data.get("sdk_history", None)
-        sdk_history_full = data.get("sdk_history_full", None)
-
-        current_history = sdk_history_full if (show_all_values and 'all' in show_all_values and sdk_history_full is not None) else sdk_history
-        if current_history is None or current_history.empty:
-            empty_fig = px.line()
-            empty_fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
-            return empty_fig
-        current_history = current_history.copy()
-        if "place_in_queue" in current_history.columns:
-            current_history["place_in_queue"] = pd.to_numeric(current_history["place_in_queue"], errors="coerce")
-            current_history = current_history[~(current_history["place_in_queue"] > 5000)]
-
-        fig = px.line(
-            current_history,
-            x="snapshot_time",
-            y="place_in_queue",
-            color="apartment_id",
-            hover_name="apartment_id",
-            markers=True,
+    if ENABLE_SDK:
+        @app.callback(
+            Output("sdk-history", "figure"),
+            [Input("sdk-show-all", "value")],
         )
-        fig.update_yaxes(autorange=True)
-        fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
-        fig.update_xaxes(tickformat="%Y-%m-%d")
-        return fig
+        def update_sdk_history(show_all_values):
+            data = get_data_if_new(data_dir)
+            sdk_history = data.get("sdk_history", None)
+            sdk_history_full = data.get("sdk_history_full", None)
+
+            current_history = sdk_history_full if (show_all_values and 'all' in show_all_values and sdk_history_full is not None) else sdk_history
+            if current_history is None or current_history.empty:
+                empty_fig = px.line()
+                empty_fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
+                return empty_fig
+            current_history = current_history.copy()
+            if "place_in_queue" in current_history.columns:
+                current_history["place_in_queue"] = pd.to_numeric(current_history["place_in_queue"], errors="coerce")
+                current_history = current_history[~(current_history["place_in_queue"] > 5000)]
+
+            fig = px.line(
+                current_history,
+                x="snapshot_time",
+                y="place_in_queue",
+                color="apartment_id",
+                hover_name="apartment_id",
+                markers=True,
+            )
+            fig.update_yaxes(autorange=True)
+            fig.update_layout(template='plotly_dark', plot_bgcolor='#111111', paper_bgcolor='#111111', font_color='#eaeaea')
+            fig.update_xaxes(tickformat="%Y-%m-%d")
+            return fig
 
     # clientside callbacks to open external URLs when user clicks the 'Open' cell
     app.clientside_callback(
@@ -584,23 +592,24 @@ def make_app(data_dir: str = "data"):
         [Input('kab-table', 'active_cell'), Input('kab-table', 'data')]
     )
 
-    app.clientside_callback(
-        """
-        function(active_cell, table_data) {
-            if(!active_cell || !table_data) { return ''; }
-            var row = table_data[active_cell.row];
-            if(!row) { return ''; }
-            var col = active_cell.column_id;
-            if(col === 'open_url') {
-                var url = row['url'] || row['building_url'] || null;
-                if(url) { window.open(url, '_blank'); }
+    if ENABLE_SDK:
+        app.clientside_callback(
+            """
+            function(active_cell, table_data) {
+                if(!active_cell || !table_data) { return ''; }
+                var row = table_data[active_cell.row];
+                if(!row) { return ''; }
+                var col = active_cell.column_id;
+                if(col === 'open_url') {
+                    var url = row['url'] || row['building_url'] || null;
+                    if(url) { window.open(url, '_blank'); }
+                }
+                return '';
             }
-            return '';
-        }
-        """,
-        Output('open-url-sdk', 'children'),
-        [Input('sdk-table', 'active_cell'), Input('sdk-table', 'data')]
-    )
+            """,
+            Output('open-url-sdk', 'children'),
+            [Input('sdk-table', 'active_cell'), Input('sdk-table', 'data')]
+        )
 
     app.clientside_callback(
         """

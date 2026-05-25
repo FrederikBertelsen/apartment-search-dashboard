@@ -113,11 +113,14 @@ def add_apartment_ids(df: pd.DataFrame, source: str) -> pd.DataFrame:
 
 def dedupe_latest_by_id(df: pd.DataFrame, time_col: str = "snapshot_time") -> pd.DataFrame:
     df = df.copy()
+    if df.empty:
+        return df
+
     if time_col in df.columns:
         df[time_col] = pd.to_datetime(df[time_col], errors="coerce")
+        df = df.sort_values(time_col)
     # keep the last snapshot per apartment_id
     if "apartment_id" in df.columns:
-        df = df.sort_values(time_col)
         df = df.drop_duplicates(subset=["apartment_id"], keep="last").reset_index(drop=True)
     return df
 
