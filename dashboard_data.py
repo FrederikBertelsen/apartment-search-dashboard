@@ -18,7 +18,8 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 from datetime import datetime
 
-from data_loader import load_all_clean_data
+import os
+from data_loader import load_all_clean_data, load_kab_clean_data
 
 
 def _md5_text(s: str) -> str:
@@ -252,7 +253,14 @@ def compute_price_per_m2_sdk(df: pd.DataFrame) -> pd.DataFrame:
         df["estimated_price_kr"] = pd.to_numeric(df["estimated_price_kr"], errors="coerce")
     if "area_m2" in df.columns:
         df["area_m2"] = pd.to_numeric(df["area_m2"], errors="coerce")
-    df["price_per_m2"] = df["estimated_price_kr"] / df["area_m2"]
+    # compute only when both columns exist to avoid KeyError
+    if "estimated_price_kr" in df.columns and "area_m2" in df.columns:
+        try:
+            df["price_per_m2"] = df["estimated_price_kr"] / df["area_m2"]
+        except Exception:
+            df["price_per_m2"] = float("nan")
+    else:
+        df["price_per_m2"] = float("nan")
     df.loc[~np.isfinite(df["price_per_m2"]), "price_per_m2"] = np.nan
     # round for display consistency
     if "price_per_m2" in df.columns:
@@ -384,9 +392,15 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
       - `kab_history`: full KAB history series (for plotting)
       - `top10_eta`: top-10 ETA to queue=0 DataFrame
     """
-    data = load_all_clean_data(data_dir)
-    sdk = data.get("s_dk", pd.DataFrame())
-    kab = data.get("kab", pd.DataFrame())
+    enable_sdk = os.getenv("ENABLE_SDK", "0").strip().lower() in {"1", "true", "yes", "on"}
+    if enable_sdk:
+        data = load_all_clean_data(data_dir)
+        sdk = data.get("s_dk", pd.DataFrame())
+        kab = data.get("kab", pd.DataFrame())
+    else:
+        # When s.dk is disabled, avoid loading or processing s.dk files entirely.
+        kab = load_kab_clean_data(data_dir)
+        sdk = pd.DataFrame()
 
     # ensure snapshot_time exists and is datetime
     if "snapshot_time" in kab.columns:
@@ -860,10 +874,17 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
 
     # add nearest ETA info and compute combined lowest place
     # Summary for KAB and s.dk only (omit combined price table row)
-    summary_stats = pd.DataFrame([
-        _stats_for(kab_latest, "kab"),
-        _stats_for(sdk_latest, "s_dk"),
-    ])
+    stats_list = [_stats_for(kab_latest, "kab")]
+    # include s.dk summary only when s.dk was actually loaded (and enabled)
+    try:
+        enable_sdk
+    except NameError:
+        enable_sdk = os.getenv("ENABLE_SDK", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+    if enable_sdk and sdk is not None and not sdk.empty:
+        stats_list.append(_stats_for(sdk_latest, "s_dk"))
+
+    summary_stats = pd.DataFrame(stats_list)
 
     # nearest ETA (from top10_eta) - use human-readable `eta_in` if available
     nearest_eta_str = None
