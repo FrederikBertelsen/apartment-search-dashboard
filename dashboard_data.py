@@ -283,7 +283,22 @@ def _prepare_sdk_history(df_sdk: pd.DataFrame) -> pd.DataFrame:
     cols = ["snapshot_time", "apartment_id", "place_in_queue_min", "building_name", "address"]
     existing = [c for c in cols if c in df.columns]
     # normalize column name to `place_in_queue` for plotting convenience
-    res = df[existing].sort_values(["apartment_id", "snapshot_time"]).reset_index(drop=True)
+    if not existing:
+        return pd.DataFrame()
+
+    res = df[existing].copy()
+    # sort only by columns that exist to avoid KeyError when snapshot_time is missing
+    sort_cols = []
+    if "apartment_id" in res.columns:
+        sort_cols.append("apartment_id")
+    if "snapshot_time" in res.columns:
+        sort_cols.append("snapshot_time")
+
+    if sort_cols:
+        res = res.sort_values(sort_cols).reset_index(drop=True)
+    else:
+        res = res.reset_index(drop=True)
+
     if "place_in_queue_min" in res.columns:
         res = res.rename(columns={"place_in_queue_min": "place_in_queue"})
     return res
