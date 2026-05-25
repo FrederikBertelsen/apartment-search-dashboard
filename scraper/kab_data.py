@@ -9,6 +9,9 @@ from clean_kab_data import clean_kab_data
 
 ENV_VALUES = dotenv_values(".env")
 
+BOLIGOENSKER_URL = "https://www.kab-selvbetjening.dk/Ansoger/Min-side/Boligoensker"
+QUEUE_PLACERINGER_URL = "https://www.kab-selvbetjening.dk/Ansoger/AnsogerApi/_GetAnsogerPlaceringer"
+
 
 
 def accept_cookies_if_needed(page: PageWrapper):
@@ -56,24 +59,41 @@ def main():
         building_rows = []
         queue_placements_loading = True
         while queue_placements_loading:
-            page.goto("https://www.kab-selvbetjening.dk/Ansoger/Min-side/Boligoensker")
-            page.wait_for_idle()
-            page.sleep(10000)
-
-            for i in range(3):
-                building_rows = page.locator("tr[data-lejemaalgruppe-id]").all()
-                if "beregner placering" in building_rows[0].locator("td").nth(1).inner_text().lower().strip():
-                    if i >= 2:
-                        if tries >= 3:
-                            print("Failed to load building data after multiple tries, exiting")
-                            exit(1)
-                        print("Building data is still loading after multiple tries, refreshing page and trying again")
-                        tries += 1
-                        continue
-                    page.sleep(10000)
-                else:
-                    queue_placements_loading = False
+            if not page.goto_and_wait_for_response(
+                url=BOLIGOENSKER_URL,
+                response_url=QUEUE_PLACERINGER_URL,
+                method="POST",
+                timeout=60000,
+            ):
+                if tries >= 3:
+                    print("Failed to load queue placements after multiple tries, exiting")
                     break
+
+                tries += 1
+                print("Queue placements request did not finish in time, retrying")
+                continue
+
+            page.wait_for_idle()
+
+            page.page.wait_for_function(
+                """() => {
+                    const row = document.querySelector('tr[data-lejemaalgruppe-id]');
+                    if (!row) {
+                        return false;
+                    }
+
+                    const cell = row.querySelector('td:nth-child(2)');
+                    if (!cell) {
+                        return false;
+                    }
+
+                    return !cell.textContent.toLowerCase().includes('beregner placering');
+                }""",
+                timeout=30000,
+            )
+
+            building_rows = page.locator("tr[data-lejemaalgruppe-id]").all()
+            queue_placements_loading = False
 
 
         print(f"Found {len(building_rows)} applied buildings")
