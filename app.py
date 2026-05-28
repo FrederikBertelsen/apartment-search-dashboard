@@ -131,7 +131,7 @@ def make_app(data_dir: str = "data"):
             fig_sdk.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
             fig_sdk.update_xaxes(tickformat="%Y-%m-%d")
 
-        # prepare KAB lowest-queue history figure (overall min + avg of lowest 10 per snapshot)
+        # prepare KAB lowest-queue history figure (overall min + averages of the lowest N per snapshot)
         df_for_lowest = data.get("kab_history_full", None)
         lowest_table_columns = []
         lowest_table_data = []
@@ -143,31 +143,52 @@ def make_app(data_dir: str = "data"):
             if "place_in_queue" in df_lowest.columns:
                 df_lowest["place_in_queue"] = pd.to_numeric(df_lowest["place_in_queue"], errors="coerce")
                 df_lowest = df_lowest[~(df_lowest["place_in_queue"] > 5000)]
+
+            def _avg_lowest_n(series, n=10):
+                values = series.dropna().nsmallest(n)
+                return float(values.mean()) if not values.empty else float("nan")
+
             try:
                 df_min = df_lowest.groupby("snapshot_time", as_index=False)["place_in_queue"].min().sort_values("snapshot_time")
-
-                def _avg_lowest_n(s, n=10):
-                    vals = s.dropna().nsmallest(n)
-                    return float(vals.mean()) if not vals.empty else float("nan")
-
                 df_avg10 = (
                     df_lowest.groupby("snapshot_time")["place_in_queue"]
                     .apply(lambda s: _avg_lowest_n(s, 10))
                     .reset_index(name="avg_lowest_10")
                     .sort_values("snapshot_time")
                 )
+                df_avg100 = (
+                    df_lowest.groupby("snapshot_time")["place_in_queue"]
+                    .apply(lambda s: _avg_lowest_n(s, 100))
+                    .reset_index(name="avg_lowest_100")
+                    .sort_values("snapshot_time")
+                )
+                df_avg1000 = (
+                    df_lowest.groupby("snapshot_time")["place_in_queue"]
+                    .apply(lambda s: _avg_lowest_n(s, 1000))
+                    .reset_index(name="avg_lowest_1000")
+                    .sort_values("snapshot_time")
+                )
             except Exception:
                 df_min = pd.DataFrame(columns=["snapshot_time", "place_in_queue"])
                 df_avg10 = pd.DataFrame(columns=["snapshot_time", "avg_lowest_10"])
+                df_avg100 = pd.DataFrame(columns=["snapshot_time", "avg_lowest_100"])
+                df_avg1000 = pd.DataFrame(columns=["snapshot_time", "avg_lowest_1000"])
 
             try:
                 if "snapshot_time" in df_min.columns:
                     df_min["snapshot_time"] = pd.to_datetime(df_min["snapshot_time"], errors="coerce")
                 if "snapshot_time" in df_avg10.columns:
                     df_avg10["snapshot_time"] = pd.to_datetime(df_avg10["snapshot_time"], errors="coerce")
+                if "snapshot_time" in df_avg100.columns:
+                    df_avg100["snapshot_time"] = pd.to_datetime(df_avg100["snapshot_time"], errors="coerce")
+                if "snapshot_time" in df_avg1000.columns:
+                    df_avg1000["snapshot_time"] = pd.to_datetime(df_avg1000["snapshot_time"], errors="coerce")
 
                 df_min_table = df_min.rename(columns={"place_in_queue": "lowest_place_in_queue"})
-                df_lowest_table = pd.merge(df_min_table, df_avg10, on="snapshot_time", how="outer").sort_values("snapshot_time", ascending=False)
+                df_lowest_table = df_min_table
+                for extra_df in (df_avg10, df_avg100, df_avg1000):
+                    df_lowest_table = pd.merge(df_lowest_table, extra_df, on="snapshot_time", how="outer")
+                df_lowest_table = df_lowest_table.sort_values("snapshot_time", ascending=False)
 
                 if df_lowest_table.empty and "snapshot_time" in df_lowest.columns:
                     times = sorted(df_lowest["snapshot_time"].dropna().unique(), reverse=True)
@@ -177,7 +198,16 @@ def make_app(data_dir: str = "data"):
                     df_lowest_table["snapshot_time"] = pd.to_datetime(df_lowest_table["snapshot_time"], errors="coerce")
                     df_lowest_table["snapshot_time"] = df_lowest_table["snapshot_time"].dt.strftime("%Y-%m-%d")
 
-                lowest_table_columns = [{"name": c, "id": c} for c in df_lowest_table.columns]
+                lowest_table_columns = []
+                for c in df_lowest_table.columns:
+                    if c == "snapshot_time":
+                        lowest_table_columns.append({"name": c, "id": c})
+                    elif c == "lowest_place_in_queue":
+                        lowest_table_columns.append({"name": c, "id": c, "type": "numeric", "format": Format(precision=2, scheme=Scheme.fixed)})
+                    elif c in {"avg_lowest_10", "avg_lowest_100", "avg_lowest_1000"}:
+                        lowest_table_columns.append({"name": c, "id": c, "type": "numeric", "format": Format(precision=2, scheme=Scheme.fixed)})
+                    else:
+                        lowest_table_columns.append({"name": c, "id": c})
                 lowest_table_data = df_lowest_table.to_dict("records")
             except Exception:
                 lowest_table_columns = []
@@ -185,19 +215,49 @@ def make_app(data_dir: str = "data"):
 
             plot_min = df_min.dropna(subset=["place_in_queue"]) if not df_min.empty else pd.DataFrame()
             plot_avg = df_avg10.dropna(subset=["avg_lowest_10"]) if not df_avg10.empty else pd.DataFrame()
+            plot_avg100 = df_avg100.dropna(subset=["avg_lowest_100"]) if not df_avg100.empty else pd.DataFrame()
+            plot_avg1000 = df_avg1000.dropna(subset=["avg_lowest_1000"]) if not df_avg1000.empty else pd.DataFrame()
 
+            primary_source = None
+            primary_y = None
+            primary_label = None
             if not plot_min.empty:
+                primary_source = plot_min
+                primary_y = "place_in_queue"
+                primary_label = "Lowest place in queue"
+            elif not plot_avg.empty:
+                primary_source = plot_avg
+                primary_y = "avg_lowest_10"
+                primary_label = "Avg lowest 10"
+            elif not plot_avg100.empty:
+                primary_source = plot_avg100
+                primary_y = "avg_lowest_100"
+                primary_label = "Avg lowest 100"
+            elif not plot_avg1000.empty:
+                primary_source = plot_avg1000
+                primary_y = "avg_lowest_1000"
+                primary_label = "Avg lowest 1000"
+
+            if primary_source is not None:
                 fig_lowest = px.line(
-                    plot_min,
+                    primary_source,
                     x="snapshot_time",
-                    y="place_in_queue",
-                    labels={"place_in_queue": "Lowest place in queue"},
+                    y=primary_y,
+                    labels={primary_y: primary_label},
                     markers=True,
                 )
                 if fig_lowest.data:
-                    fig_lowest.data[0].name = "Lowest place in queue"
+                    fig_lowest.data[0].name = primary_label
                     fig_lowest.data[0].showlegend = True
-                if not plot_avg.empty:
+                if not plot_min.empty and primary_y != "place_in_queue":
+                    fig_lowest.add_scatter(
+                        x=plot_min["snapshot_time"],
+                        y=plot_min["place_in_queue"],
+                        mode="lines+markers",
+                        name="Lowest place in queue",
+                        line=dict(width=2),
+                    )
+                if not plot_avg.empty and primary_y != "avg_lowest_10":
                     fig_lowest.add_scatter(
                         x=plot_avg["snapshot_time"],
                         y=plot_avg["avg_lowest_10"],
@@ -205,20 +265,22 @@ def make_app(data_dir: str = "data"):
                         name="Avg lowest 10",
                         line=dict(dash="dash", width=2),
                     )
-                fig_lowest.update_yaxes(autorange=True)
-                fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
-                fig_lowest.update_xaxes(tickformat="%Y-%m-%d")
-            elif not plot_avg.empty:
-                fig_lowest = px.line(
-                    plot_avg,
-                    x="snapshot_time",
-                    y="avg_lowest_10",
-                    labels={"avg_lowest_10": "Avg lowest 10"},
-                    markers=True,
-                )
-                if fig_lowest.data:
-                    fig_lowest.data[0].name = "Avg lowest 10"
-                    fig_lowest.data[0].showlegend = True
+                if not plot_avg100.empty and primary_y != "avg_lowest_100":
+                    fig_lowest.add_scatter(
+                        x=plot_avg100["snapshot_time"],
+                        y=plot_avg100["avg_lowest_100"],
+                        mode="lines+markers",
+                        name="Avg lowest 100",
+                        line=dict(dash="dot", width=2),
+                    )
+                if not plot_avg1000.empty and primary_y != "avg_lowest_1000":
+                    fig_lowest.add_scatter(
+                        x=plot_avg1000["snapshot_time"],
+                        y=plot_avg1000["avg_lowest_1000"],
+                        mode="lines+markers",
+                        name="Avg lowest 1000",
+                        line=dict(dash="longdash", width=2),
+                    )
                 fig_lowest.update_yaxes(autorange=True)
                 fig_lowest.update_layout(template="plotly_dark", plot_bgcolor="#111111", paper_bgcolor="#111111", font_color="#eaeaea")
                 fig_lowest.update_xaxes(tickformat="%Y-%m-%d")
@@ -299,7 +361,7 @@ def make_app(data_dir: str = "data"):
 
             top30_columns = []
             for c in top30_df.columns:
-                if c == "apartment_id":
+                if c in {"apartment_id", "building_url", "url", "open_url"}:
                     continue
                 if c == "slope_per_day":
                     top30_columns.append({
@@ -311,6 +373,9 @@ def make_app(data_dir: str = "data"):
                 else:
                     top30_columns.append({"name": c, "id": c})
             top30_data = top30_df.to_dict("records")
+            for r in top30_data:
+                r["open_url"] = "open link"
+            top30_columns.append({"name": "Open", "id": "open_url"})
         else:
             top30_columns = []
             top30_data = []
@@ -388,7 +453,7 @@ def make_app(data_dir: str = "data"):
                 dcc.Tab(label="KAB Lowest Queue", style=tab_style, selected_style=tab_selected_style, children=[
                     html.H2("KAB - Lowest queue position over time"),
                     dcc.Graph(id="kab-lowest-queue", figure=fig_lowest, style={"height": "450px"}),
-                    html.H3("Lowest and avg lowest 10 per snapshot"),
+                    html.H3("Lowest and average lowest 10 / 100 / 1000 per snapshot"),
                     dash_table.DataTable(
                         id="kab-lowest-table",
                         columns=cast(List[Dict[str, Any]], lowest_table_columns),
@@ -466,6 +531,7 @@ def make_app(data_dir: str = "data"):
             ),
             dcc.Tabs(tabs, style={"backgroundColor": "#222222", "color": "#eaeaea"}),
             html.Div(id='open-url-kab', style={'display': 'none'}),
+            html.Div(id='open-url-top30', style={'display': 'none'}),
             html.Div(id='open-url-sdk', style={'display': 'none'}) if ENABLE_SDK else None,
             html.Div(id='open-url-price', style={'display': 'none'}),
         ], style=page_style)
@@ -524,6 +590,24 @@ def make_app(data_dir: str = "data"):
         """,
         Output('open-url-kab', 'children'),
         [Input('kab-table', 'active_cell'), Input('kab-table', 'data')]
+    )
+
+    app.clientside_callback(
+        """
+        function(active_cell, table_data) {
+            if(!active_cell || !table_data) { return ''; }
+            var row = table_data[active_cell.row];
+            if(!row) { return ''; }
+            var col = active_cell.column_id;
+            if(col === 'open_url') {
+                var url = row['building_url'] || row['url'] || null;
+                if(url) { window.open(url, '_blank'); }
+            }
+            return '';
+        }
+        """,
+        Output('open-url-top30', 'children'),
+        [Input('top30-eta', 'active_cell'), Input('top30-eta', 'data')]
     )
 
     if ENABLE_SDK:

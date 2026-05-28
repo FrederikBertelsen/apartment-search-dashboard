@@ -373,6 +373,8 @@ def estimate_eta_to_zero(kab_full: pd.DataFrame, min_points: int = 2):
                 "company": last_row.get("company") if "company" in last_row.index else None,
                 "department": last_row.get("department") if "department" in last_row.index else None,
                 "tenancy_count": last_row.get("tenancy_count") if "tenancy_count" in last_row.index else None,
+                "building_url": last_row.get("building_url") if "building_url" in last_row.index else None,
+                "url": last_row.get("url") if "url" in last_row.index else None,
             }
         )
 
@@ -676,6 +678,16 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
     else:
         top30_eta["changes_last_30_days"] = None
 
+    if not top30_eta.empty:
+        def _pick_open_url(row):
+            for col in ("building_url", "url"):
+                val = row.get(col)
+                if pd.notna(val) and str(val).strip():
+                    return val
+            return None
+
+        top30_eta["open_url"] = top30_eta.apply(_pick_open_url, axis=1)
+
     # ensure place_change_30d is numeric and filter out apartments that
     # did not change in the last 30 days — the Top-30 ETA should reflect
     # recent movement only (user expectation).
@@ -788,7 +800,7 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
         except Exception:
             top30_eta = top30_eta.head(30).reset_index(drop=True)
 
-    top30_eta = top30_eta[["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days", "apartment_id"]]
+    top30_eta = top30_eta[["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days", "open_url", "apartment_id"]]
     top30_eta = top30_eta.reset_index(drop=True)
 
     kab_history_top_eta = pd.DataFrame()
