@@ -688,6 +688,23 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
 
         top30_eta["open_url"] = top30_eta.apply(_pick_open_url, axis=1)
 
+        def _normalize_kab_url(u):
+            if pd.isna(u) or u is None:
+                return None
+            s = str(u).strip()
+            if not s:
+                return None
+            if s.startswith("http"):
+                return s
+            if s.startswith("/"):
+                return kab_base + s
+            return kab_base + "/" + s
+
+        if "building_url" in top30_eta.columns:
+            top30_eta["building_url"] = top30_eta["building_url"].apply(_normalize_kab_url)
+        elif "open_url" in top30_eta.columns:
+            top30_eta["building_url"] = top30_eta["open_url"].apply(_normalize_kab_url)
+
     # ensure place_change_30d is numeric and filter out apartments that
     # did not change in the last 30 days — the Top-30 ETA should reflect
     # recent movement only (user expectation).
@@ -781,7 +798,7 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
             top30_eta = top30_eta[top30_eta["last_place"] < 5000].reset_index(drop=True)
 
     # ensure columns exist and pick order: company, department, tenancy_count, last_place, eta_in, slope_per_day, changes_last_30_days
-    for col in ["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days"]:
+    for col in ["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days", "building_url", "url"]:
         if col not in top30_eta.columns:
             top30_eta[col] = None
 
@@ -800,7 +817,7 @@ def load_and_prepare_all(data_dir: str = "data") -> Dict[str, pd.DataFrame]:
         except Exception:
             top30_eta = top30_eta.head(30).reset_index(drop=True)
 
-    top30_eta = top30_eta[["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days", "open_url", "apartment_id"]]
+    top30_eta = top30_eta[["company", "department", "tenancy_count", "last_place", "eta_in", "slope_per_day", "changes_last_30_days", "open_url", "building_url", "url", "apartment_id"]]
     top30_eta = top30_eta.reset_index(drop=True)
 
     kab_history_top_eta = pd.DataFrame()

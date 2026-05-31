@@ -443,6 +443,7 @@ def make_app(data_dir: str = "data"):
                         page_action='none',
                         style_table={"overflowX": "auto", "maxWidth": "100%"},
                         style_data_conditional=[
+                            {"if": {"column_id": "open_url"}, "color": "#1e90ff", "textDecoration": "underline", "cursor": "pointer", "textAlign": "center"},
                             {"if": {"state": "active"}, "backgroundColor": "#ffffff", "border": "1px solid #333333", "color": "#000000"},
                             {"if": {"state": "selected"}, "backgroundColor": "#ffffff", "border": "1px solid #333333", "color": "#000000"},
                         ],
