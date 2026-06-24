@@ -63,7 +63,7 @@ def main():
                 url=BOLIGOENSKER_URL,
                 response_url=QUEUE_PLACERINGER_URL,
                 method="POST",
-                timeout=60000,
+                timeout=300000,
             ):
                 if tries >= 3:
                     print("Failed to load queue placements after multiple tries, exiting")
