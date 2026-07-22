@@ -5,21 +5,21 @@ import re
 from dotenv import dotenv_values
 from pathlib import Path
 
-from web_automator import BrowserWrapper, PageWrapper, DataCollector
+from web_automator import Browser, Page, DataCollector
 
 from clean_s_dk_data import clean_s_dk_data
 
 ENV_VALUES = dotenv_values(".env")
 
 
-def accept_cookies_if_needed(page: PageWrapper):
+def accept_cookies_if_needed(page: Page):
     accept_cookies_selector = ".cc-accept"
-    if page.is_visible(accept_cookies_selector):
+    if page.visible(accept_cookies_selector):
         if not page.click(accept_cookies_selector):
             print("Failed to click accept cookies button")
             exit(1)
         print("Accepted cookies")
-        page.wait_for_idle()
+        page.wait_for_load()
     else:
         print("No cookie banner found, skipping")
 
@@ -33,7 +33,7 @@ def main():
 
     dc = DataCollector(print_on_flush=True, print_columns=["building_name", "address"])
 
-    with BrowserWrapper().start_browser(headless=True, block_images=True) as browser:
+    with Browser().start(headless=True, block_images=True) as browser:
         page = browser.new_page()
 
         page.goto("https://mit.s.dk/studiebolig/login/")
@@ -62,37 +62,37 @@ def main():
         accept_cookies_if_needed(page)
 
         page.click("div[role='tablist']")
-        page.wait_for_selector("div.list-group > a")
-        page_urls = page.get_attributes("div.list-group > a", "href")
+        page.wait_for("div.list-group > a")
+        page_urls = page.all_attributes("div.list-group > a", "href")
 
         if not page_urls:
             print("Failed to get building URLs")
             exit(1)
 
         for url in page_urls:
-            print(f"Handling building: '{page.title()}'")
+            print(f"Handling building: '{page.title}'")
             page.goto(f"https://mit.s.dk{url}")
 
-            page.sleep(10000)
+            page.wait(10000)
 
-            dc.set_field("url", page.get_url())
+            dc.set_field("url", page.url)
 
-            building_name = page.title().replace("student tenancies | Apply on s.dk", "").strip()
+            building_name = page.title.replace("student tenancies | Apply on s.dk", "").strip()
             dc.set_field("building_name", building_name)
 
-            dc.set_current_row_as_base()
+            dc.set_template()
 
-            if not page.is_visible('table.tenancies-table > tbody > tr'):
+            if not page.visible('table.tenancies-table > tbody > tr'):
                 try:
-                    page.locator('a[data-parent="#buildingGroups"]').first.click(timeout=1000*120)
-                    page.wait_for_idle()
+                    page.page.locator('a[data-parent="#buildingGroups"]').first.click(timeout=1000*120)
+                    page.wait_for_load()
                 except Exception as e:
-                    print(f"    - Failed to click 'Tenancies' group for '{page.title()}'")
+                    print(f"    - Failed to click 'Tenancies' group for '{page.title}'")
                     exit(1)
 
-            page.wait_for_selector("table.tenancies-table > tbody > tr")
+            page.wait_for("table.tenancies-table > tbody > tr")
 
-            tenancies_info = page.inner_text("a[href='#collapse-1'] span.text-muted")
+            tenancies_info = page.text("a[href='#collapse-1'] span.text-muted")
             price_low = "N/A"
             price_high = "N/A"
             area_low = "N/A"
@@ -130,7 +130,7 @@ def main():
                 "G": "1000+",
             }
 
-            applied_tenancies = page.locator("table.tenancies-table > tbody > tr", has_text="Delete application")
+            applied_tenancies = page.page.locator("table.tenancies-table > tbody > tr", has_text="Delete application")
 
             if applied_tenancies.count() == 0:
                 print("No applied tenancies found, going to next building")
@@ -155,7 +155,7 @@ def main():
                     "place_in_queue": ranking_place,
                     "estimated_price_kr": estimated_price
                 })
-                dc.commit_row()
+                dc.commit()
 
 
             # print(f"deleted_count: {deleted_count}")
@@ -165,7 +165,7 @@ def main():
     csv_path = f"data/s_dk_tenancies_{today_date_time}.csv"
     
     print(f"Saving data to '{csv_path}'")
-    dc.save_csv(csv_path)
+    dc.save(csv_path)
 
     clean_s_dk_data(csv_path)
 

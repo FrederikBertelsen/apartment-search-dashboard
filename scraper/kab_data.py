@@ -3,7 +3,7 @@ import re
 
 from dotenv import dotenv_values
 from pathlib import Path
-from web_automator import BrowserWrapper, PageWrapper, DataCollector
+from web_automator import Browser, DataCollector, Page
 
 from clean_kab_data import clean_kab_data
 
@@ -14,15 +14,15 @@ QUEUE_PLACERINGER_URL = "https://www.kab-selvbetjening.dk/Ansoger/AnsogerApi/_Ge
 
 
 
-def accept_cookies_if_needed(page: PageWrapper):
-    page.sleep_random(1000, 2000)
+def accept_cookies_if_needed(page: Page):
+    page.wait_random(1000, 2000)
     accept_cookies_selector = ".cc-accept"
     if page.exists(accept_cookies_selector):
         if not page.click(accept_cookies_selector):
             print("Failed to click accept cookies button")
             exit(1)
         print("Accepted cookies")
-        page.sleep_random(1000, 2000)
+        page.wait_random(1000, 2000)
     else:
         print("No cookie banner found, skipping")
 
@@ -36,7 +36,7 @@ def main():
 
     dc = DataCollector(print_on_flush=True, print_columns=["place_in_queue","company","department"])
 
-    with BrowserWrapper().start_browser(headless=True, block_images=True) as browser:
+    with Browser().start(headless=True, block_images=True) as browser:
         page = browser.new_page()
 
         if not page.login(
@@ -59,11 +59,11 @@ def main():
         building_rows = []
         queue_placements_loading = True
         while queue_placements_loading:
-            if not page.goto_and_wait_for_response(
-                url=BOLIGOENSKER_URL,
-                response_url=QUEUE_PLACERINGER_URL,
-                method="POST",
+            if not page.goto(
+                url=BOLIGOENSKER_URL, 
+                wait_for_response=QUEUE_PLACERINGER_URL,
                 timeout=300000,
+                response_method="POST",
             ):
                 if tries >= 3:
                     print("Failed to load queue placements after multiple tries, exiting")
@@ -73,7 +73,7 @@ def main():
                 print("Queue placements request did not finish in time, retrying")
                 continue
 
-            page.wait_for_idle()
+            page.wait_for_load()
 
             page.page.wait_for_function(
                 """() => {
@@ -92,7 +92,7 @@ def main():
                 timeout=30000,
             )
 
-            building_rows = page.locator("tr[data-lejemaalgruppe-id]").all()
+            building_rows = page.page.locator("tr[data-lejemaalgruppe-id]").all()
             queue_placements_loading = False
 
 
@@ -160,13 +160,13 @@ def main():
                 "location": location,
                 "department": department
             })
-            dc.commit_row()
+            dc.commit()
 
     today_date_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     csv_path = f"data/kab_tenancies_{today_date_time}.csv"
 
     print(f"Saving data to '{csv_path}'")
-    dc.save_csv(csv_path)
+    dc.save(csv_path)
 
     clean_kab_data(csv_path)
 
